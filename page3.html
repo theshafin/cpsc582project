@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gender Wage Gap - Canadian Labour Market</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f9f8f5; --card: #ffffff; --text: #1a1a18; --muted: #6b6b65;
+    --border: #e0dfd8; --accent: #2a6140; --men: #1a5fa8; --women: #b5294e;
+    --shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    height: 52px; background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; box-shadow: var(--shadow);
+  }
+  .nav-title { font-weight: 700; font-size: 15px; }
+  .nav-pages { display: flex; gap: 4px; }
+  .nav-page {
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    color: var(--muted); text-decoration: none; cursor: default; border: 1px solid transparent;
+  }
+  .nav-page.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .container { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+  .page-header { margin-bottom: 24px; }
+  .page-header h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .page-header p { color: var(--muted); font-size: 15px; }
+
+  .playback-bar {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 20px; box-shadow: var(--shadow); margin-bottom: 20px;
+  }
+  .play-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 15px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: opacity 0.15s;
+  }
+  .play-btn:hover { opacity: 0.85; }
+  .scrubber { flex: 1; accent-color: var(--accent); cursor: pointer; }
+  .period-badge {
+    font-size: 14px; font-weight: 700; color: var(--accent);
+    background: #e8f2ec; border-radius: 6px; padding: 5px 12px; white-space: nowrap;
+  }
+
+  .main-layout { display: grid; grid-template-columns: 1fr 210px; gap: 16px; align-items: start; }
+
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 22px 24px; box-shadow: var(--shadow);
+  }
+
+  .info-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 18px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .info-section { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .info-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .info-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .info-province { font-size: 34px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .info-amount { font-size: 20px; font-weight: 700; margin-bottom: 3px; }
+  .info-sub { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  .legend-row { display: flex; align-items: center; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
+  .leg-men { width: 22px; height: 4px; background: #1a5fa8; border-radius: 2px; }
+  .leg-women { width: 22px; height: 4px; background: #b5294e; border-radius: 2px; }
+  .leg-mid { width: 22px; height: 3px; background: #1a1a18; border-radius: 2px; }
+
+  .annotations { margin-top: 20px; }
+  .annotations h3 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .annotation-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .annotation-list li { font-size: 13px; color: var(--text); display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
+  .ann-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+  .ann-badge.gap { background: #fef3c7; color: #92400e; }
+  .ann-badge.trend { background: #f0fdf4; color: #166534; }
+
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-title">&#127809; Canadian Labour Market</span>
+  <div class="nav-pages">
+    <a class="nav-page" href="index.html">1. National Overview</a>
+    <a class="nav-page" href="page2.html">2. Economic Shocks</a>
+    <a class="nav-page active" href="page3.html">3. Gender Wage Gap</a>
+    <a class="nav-page" href="page4.html">4. Hours Worked</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <h1>Gender Wage Gap</h1>
+    <p>Each candlestick spans the men and women median wages for a province. The thick black line marks the midpoint average. The coloured edge at the top shows which gender earns more.</p>
+  </div>
+
+  <div class="playback-bar">
+    <button class="play-btn" id="playBtn">&#9654;</button>
+    <input type="range" class="scrubber" id="scrubber" min="0" step="1">
+    <span class="period-badge" id="periodLabel"></span>
+  </div>
+
+  <div class="main-layout">
+    <div class="chart-card">
+      <div class="legend-row">
+        <div class="legend-item"><div class="leg-mid"></div>Average midpoint</div>
+        <div class="legend-item" style="font-size:12px;color:var(--muted);">Top label = higher earner &nbsp;|&nbsp; Bottom label = lower earner</div>
+      </div>
+      <div id="candleChart"></div>
+    </div>
+
+    <div class="info-card">
+      <div class="info-section">
+        <div class="info-label">Largest Gap</div>
+        <div class="info-province" id="si-widest-prov">-</div>
+        <div class="info-amount" id="si-widest-amt">-</div>
+        <div class="info-sub" id="si-widest-sub">-</div>
+      </div>
+      <div class="info-section">
+        <div class="info-label">National Avg Gap</div>
+        <div class="info-amount" id="si-avg-amt" style="font-size:26px;font-weight:800;">-</div>
+        <div class="info-sub">Across all provinces</div>
+      </div>
+      <div class="info-section">
+        <div class="info-label">Smallest Gap</div>
+        <div class="info-province" id="si-narrowest-prov">-</div>
+        <div class="info-amount" id="si-narrowest-amt">-</div>
+        <div class="info-sub" id="si-narrowest-sub">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="annotations">
+    <h3>Key Observations</h3>
+    <ul class="annotation-list">
+      <li><span class="ann-badge gap">Gap</span>Alberta consistently shows the largest wage gap, driven by its resource-sector workforce where male-dominated roles command premium wages.</li>
+      <li><span class="ann-badge gap">Gap</span>Prince Edward Island and New Brunswick have the smallest gaps - in some periods women actually out-earn men in these provinces.</li>
+      <li><span class="ann-badge trend">Trend</span>The national gender wage gap has gradually narrowed since 2006, with more visible convergence after 2015 as female participation in higher-wage industries increased.</li>
+      <li><span class="ann-badge trend">Trend</span>During COVID-19 (2020), the gap temporarily shrank as male-dominated sectors like construction and resources absorbed larger employment shocks than female-dominated services.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const RAW_DATA = [{"period": "2026-H1", "geo": "AB", "men_wage": 40.0, "women_wage": 32.97, "avg_wage": 36.48, "wage_gap": 7.03, "gap_pct": 17.6}, {"period": "2026-H1", "geo": "BC", "men_wage": 40.0, "women_wage": 33.75, "avg_wage": 36.88, "wage_gap": 6.25, "gap_pct": 15.6}, {"period": "2026-H1", "geo": "OT", "men_wage": 39.0, "women_wage": 35.9, "avg_wage": 37.45, "wage_gap": 3.1, "gap_pct": 7.9}, {"period": "2026-H1", "geo": "MB", "men_wage": 32.69, "women_wage": 29.49, "avg_wage": 31.09, "wage_gap": 3.2, "gap_pct": 9.8}, {"period": "2026-H1", "geo": "NL", "men_wage": 35.0, "women_wage": 31.0, "avg_wage": 33.0, "wage_gap": 4.0, "gap_pct": 11.4}, {"period": "2026-H1", "geo": "NS", "men_wage": 33.33, "women_wage": 33.14, "avg_wage": 33.24, "wage_gap": 0.19, "gap_pct": 0.6}, {"period": "2026-H1", "geo": "SK", "men_wage": 36.0, "women_wage": 30.02, "avg_wage": 33.01, "wage_gap": 5.98, "gap_pct": 16.6}, {"period": "2026-H1", "geo": "PE", "men_wage": 28.85, "women_wage": 32.0, "avg_wage": 30.42, "wage_gap": -3.15, "gap_pct": -10.9}, {"period": "2026-H1", "geo": "NB", "men_wage": 32.0, "women_wage": 32.0, "avg_wage": 32.0, "wage_gap": 0.0, "gap_pct": 0.0}, {"period": "2026-H1", "geo": "QC", "men_wage": 38.0, "women_wage": 34.36, "avg_wage": 36.18, "wage_gap": 3.64, "gap_pct": 9.6}, {"period": "2025-H2", "geo": "AB", "men_wage": 40.6, "women_wage": 33.5, "avg_wage": 37.05, "wage_gap": 7.1, "gap_pct": 17.5}, {"period": "2025-H2", "geo": "BC", "men_wage": 38.75, "women_wage": 34.58, "avg_wage": 36.66, "wage_gap": 4.17, "gap_pct": 10.8}, {"period": "2025-H2", "geo": "OT", "men_wage": 38.0, "women_wage": 35.22, "avg_wage": 36.61, "wage_gap": 2.78, "gap_pct": 7.3}, {"period": "2025-H2", "geo": "MB", "men_wage": 31.56, "women_wage": 27.82, "avg_wage": 29.69, "wage_gap": 3.74, "gap_pct": 11.9}, {"period": "2025-H2", "geo": "NL", "men_wage": 34.77, "women_wage": 32.21, "avg_wage": 33.49, "wage_gap": 2.56, "gap_pct": 7.4}, {"period": "2025-H2", "geo": "NS", "men_wage": 31.25, "women_wage": 31.02, "avg_wage": 31.14, "wage_gap": 0.23, "gap_pct": 0.7}, {"period": "2025-H2", "geo": "SK", "men_wage": 35.77, "women_wage": 30.0, "avg_wage": 32.89, "wage_gap": 5.77, "gap_pct": 16.1}, {"period": "2025-H2", "geo": "PE", "men_wage": 27.96, "women_wage": 31.97, "avg_wage": 29.96, "wage_gap": -4.01, "gap_pct": -14.3}, {"period": "2025-H2", "geo": "NB", "men_wage": 31.0, "women_wage": 30.0, "avg_wage": 30.5, "wage_gap": 1.0, "gap_pct": 3.2}, {"period": "2025-H2", "geo": "QC", "men_wage": 36.0, "women_wage": 34.0, "avg_wage": 35.0, "wage_gap": 2.0, "gap_pct": 5.6}, {"period": "2025-H1", "geo": "AB", "men_wage": 38.46, "women_wage": 32.93, "avg_wage": 35.7, "wage_gap": 5.53, "gap_pct": 14.4}, {"period": "2025-H1", "geo": "BC", "men_wage": 40.0, "women_wage": 33.75, "avg_wage": 36.88, "wage_gap": 6.25, "gap_pct": 15.6}, {"period": "2025-H1", "geo": "OT", "men_wage": 38.46, "women_wage": 34.29, "avg_wage": 36.38, "wage_gap": 4.17, "gap_pct": 10.8}, {"period": "2025-H1", "geo": "MB", "men_wage": 32.0, "women_wage": 28.85, "avg_wage": 30.42, "wage_gap": 3.15, "gap_pct": 9.8}, {"period": "2025-H1", "geo": "NL", "men_wage": 34.87, "women_wage": 30.26, "avg_wage": 32.56, "wage_gap": 4.61, "gap_pct": 13.2}, {"period": "2025-H1", "geo": "NS", "men_wage": 32.0, "women_wage": 30.81, "avg_wage": 31.4, "wage_gap": 1.19, "gap_pct": 3.7}, {"period": "2025-H1", "geo": "SK", "men_wage": 36.0, "women_wage": 31.97, "avg_wage": 33.98, "wage_gap": 4.03, "gap_pct": 11.2}, {"period": "2025-H1", "geo": "PE", "men_wage": 30.0, "women_wage": 31.25, "avg_wage": 30.62, "wage_gap": -1.25, "gap_pct": -4.2}, {"period": "2025-H1", "geo": "NB", "men_wage": 32.0, "women_wage": 30.39, "avg_wage": 31.2, "wage_gap": 1.61, "gap_pct": 5.0}, {"period": "2025-H1", "geo": "QC", "men_wage": 35.63, "women_wage": 32.5, "avg_wage": 34.06, "wage_gap": 3.13, "gap_pct": 8.8}, {"period": "2024-H2", "geo": "AB", "men_wage": 38.46, "women_wage": 31.73, "avg_wage": 35.1, "wage_gap": 6.73, "gap_pct": 17.5}, {"period": "2024-H2", "geo": "BC", "men_wage": 38.46, "women_wage": 33.33, "avg_wage": 35.89, "wage_gap": 5.13, "gap_pct": 13.3}, {"period": "2024-H2", "geo": "OT", "men_wage": 37.1, "women_wage": 32.69, "avg_wage": 34.89, "wage_gap": 4.41, "gap_pct": 11.9}, {"period": "2024-H2", "geo": "MB", "men_wage": 31.0, "women_wage": 27.0, "avg_wage": 29.0, "wage_gap": 4.0, "gap_pct": 12.9}, {"period": "2024-H2", "geo": "NL", "men_wage": 33.5, "women_wage": 28.48, "avg_wage": 30.99, "wage_gap": 5.02, "gap_pct": 15.0}, {"period": "2024-H2", "geo": "NS", "men_wage": 30.22, "women_wage": 29.0, "avg_wage": 29.61, "wage_gap": 1.22, "gap_pct": 4.0}, {"period": "2024-H2", "geo": "SK", "men_wage": 34.62, "women_wage": 30.0, "avg_wage": 32.31, "wage_gap": 4.62, "gap_pct": 13.3}, {"period": "2024-H2", "geo": "PE", "men_wage": 28.0, "women_wage": 30.0, "avg_wage": 29.0, "wage_gap": -2.0, "gap_pct": -7.1}, {"period": "2024-H2", "geo": "NB", "men_wage": 30.0, "women_wage": 28.85, "avg_wage": 29.42, "wage_gap": 1.15, "gap_pct": 3.8}, {"period": "2024-H2", "geo": "QC", "men_wage": 35.0, "women_wage": 32.72, "avg_wage": 33.86, "wage_gap": 2.28, "gap_pct": 6.5}, {"period": "2024-H1", "geo": "AB", "men_wage": 39.0, "women_wage": 30.29, "avg_wage": 34.64, "wage_gap": 8.71, "gap_pct": 22.3}, {"period": "2024-H1", "geo": "BC", "men_wage": 38.46, "women_wage": 33.0, "avg_wage": 35.73, "wage_gap": 5.46, "gap_pct": 14.2}, {"period": "2024-H1", "geo": "OT", "men_wage": 37.38, "women_wage": 33.65, "avg_wage": 35.52, "wage_gap": 3.73, "gap_pct": 10.0}, {"period": "2024-H1", "geo": "MB", "men_wage": 30.0, "women_wage": 27.69, "avg_wage": 28.84, "wage_gap": 2.31, "gap_pct": 7.7}, {"period": "2024-H1", "geo": "NL", "men_wage": 35.0, "women_wage": 28.85, "avg_wage": 31.92, "wage_gap": 6.15, "gap_pct": 17.6}, {"period": "2024-H1", "geo": "NS", "men_wage": 30.93, "women_wage": 27.69, "avg_wage": 29.31, "wage_gap": 3.24, "gap_pct": 10.5}, {"period": "2024-H1", "geo": "SK", "men_wage": 34.5, "women_wage": 29.81, "avg_wage": 32.16, "wage_gap": 4.69, "gap_pct": 13.6}, {"period": "2024-H1", "geo": "PE", "men_wage": 28.21, "women_wage": 28.0, "avg_wage": 28.1, "wage_gap": 0.21, "gap_pct": 0.7}, {"period": "2024-H1", "geo": "NB", "men_wage": 28.85, "women_wage": 30.0, "avg_wage": 29.42, "wage_gap": -1.15, "gap_pct": -4.0}, {"period": "2024-H1", "geo": "QC", "men_wage": 34.62, "women_wage": 32.0, "avg_wage": 33.31, "wage_gap": 2.62, "gap_pct": 7.6}, {"period": "2023-H2", "geo": "AB", "men_wage": 37.0, "women_wage": 31.25, "avg_wage": 34.12, "wage_gap": 5.75, "gap_pct": 15.5}, {"period": "2023-H2", "geo": "BC", "men_wage": 37.0, "women_wage": 31.0, "avg_wage": 34.0, "wage_gap": 6.0, "gap_pct": 16.2}, {"period": "2023-H2", "geo": "OT", "men_wage": 35.9, "women_wage": 31.6, "avg_wage": 33.75, "wage_gap": 4.3, "gap_pct": 12.0}, {"period": "2023-H2", "geo": "MB", "men_wage": 30.9, "women_wage": 26.67, "avg_wage": 28.78, "wage_gap": 4.23, "gap_pct": 13.7}, {"period": "2023-H2", "geo": "NL", "men_wage": 32.5, "women_wage": 28.0, "avg_wage": 30.25, "wage_gap": 4.5, "gap_pct": 13.8}, {"period": "2023-H2", "geo": "NS", "men_wage": 29.51, "women_wage": 28.0, "avg_wage": 28.76, "wage_gap": 1.51, "gap_pct": 5.1}, {"period": "2023-H2", "geo": "SK", "men_wage": 33.28, "women_wage": 28.85, "avg_wage": 31.06, "wage_gap": 4.43, "gap_pct": 13.3}, {"period": "2023-H2", "geo": "PE", "men_wage": 27.0, "women_wage": 27.0, "avg_wage": 27.0, "wage_gap": 0.0, "gap_pct": 0.0}, {"period": "2023-H2", "geo": "NB", "men_wage": 28.0, "women_wage": 26.92, "avg_wage": 27.46, "wage_gap": 1.08, "gap_pct": 3.9}, {"period": "2023-H2", "geo": "QC", "men_wage": 33.0, "women_wage": 30.03, "avg_wage": 31.52, "wage_gap": 2.97, "gap_pct": 9.0}, {"period": "2023-H1", "geo": "AB", "men_wage": 37.22, "women_wage": 30.0, "avg_wage": 33.61, "wage_gap": 7.22, "gap_pct": 19.4}, {"period": "2023-H1", "geo": "BC", "men_wage": 36.06, "women_wage": 30.0, "avg_wage": 33.03, "wage_gap": 6.06, "gap_pct": 16.8}, {"period": "2023-H1", "geo": "OT", "men_wage": 35.0, "women_wage": 30.5, "avg_wage": 32.75, "wage_gap": 4.5, "gap_pct": 12.9}, {"period": "2023-H1", "geo": "MB", "men_wage": 30.7, "women_wage": 26.64, "avg_wage": 28.67, "wage_gap": 4.06, "gap_pct": 13.2}, {"period": "2023-H1", "geo": "NL", "men_wage": 32.39, "women_wage": 28.0, "avg_wage": 30.2, "wage_gap": 4.39, "gap_pct": 13.6}, {"period": "2023-H1", "geo": "NS", "men_wage": 28.0, "women_wage": 26.37, "avg_wage": 27.18, "wage_gap": 1.63, "gap_pct": 5.8}, {"period": "2023-H1", "geo": "SK", "men_wage": 33.65, "women_wage": 30.0, "avg_wage": 31.82, "wage_gap": 3.65, "gap_pct": 10.8}, {"period": "2023-H1", "geo": "PE", "men_wage": 28.0, "women_wage": 28.85, "avg_wage": 28.42, "wage_gap": -0.85, "gap_pct": -3.0}, {"period": "2023-H1", "geo": "NB", "men_wage": 28.0, "women_wage": 28.85, "avg_wage": 28.42, "wage_gap": -0.85, "gap_pct": -3.0}, {"period": "2023-H1", "geo": "QC", "men_wage": 33.0, "women_wage": 30.0, "avg_wage": 31.5, "wage_gap": 3.0, "gap_pct": 9.1}, {"period": "2022-H2", "geo": "AB", "men_wage": 36.0, "women_wage": 30.0, "avg_wage": 33.0, "wage_gap": 6.0, "gap_pct": 16.7}, {"period": "2022-H2", "geo": "BC", "men_wage": 35.0, "women_wage": 28.85, "avg_wage": 31.92, "wage_gap": 6.15, "gap_pct": 17.6}, {"period": "2022-H2", "geo": "OT", "men_wage": 34.0, "women_wage": 30.0, "avg_wage": 32.0, "wage_gap": 4.0, "gap_pct": 11.8}, {"period": "2022-H2", "geo": "MB", "men_wage": 29.57, "women_wage": 25.64, "avg_wage": 27.6, "wage_gap": 3.93, "gap_pct": 13.3}, {"period": "2022-H2", "geo": "NL", "men_wage": 32.46, "women_wage": 27.0, "avg_wage": 29.73, "wage_gap": 5.46, "gap_pct": 16.8}, {"period": "2022-H2", "geo": "NS", "men_wage": 28.19, "women_wage": 25.0, "avg_wage": 26.6, "wage_gap": 3.19, "gap_pct": 11.3}, {"period": "2022-H2", "geo": "SK", "men_wage": 33.5, "women_wage": 28.0, "avg_wage": 30.75, "wage_gap": 5.5, "gap_pct": 16.4}, {"period": "2022-H2", "geo": "PE", "men_wage": 25.0, "women_wage": 26.0, "avg_wage": 25.5, "wage_gap": -1.0, "gap_pct": -4.0}, {"period": "2022-H2", "geo": "NB", "men_wage": 27.8, "women_wage": 25.0, "avg_wage": 26.4, "wage_gap": 2.8, "gap_pct": 10.1}, {"period": "2022-H2", "geo": "QC", "men_wage": 32.5, "women_wage": 29.29, "avg_wage": 30.9, "wage_gap": 3.21, "gap_pct": 9.9}, {"period": "2022-H1", "geo": "AB", "men_wage": 35.0, "women_wage": 30.0, "avg_wage": 32.5, "wage_gap": 5.0, "gap_pct": 14.3}, {"period": "2022-H1", "geo": "BC", "men_wage": 35.0, "women_wage": 29.01, "avg_wage": 32.01, "wage_gap": 5.99, "gap_pct": 17.1}, {"period": "2022-H1", "geo": "OT", "men_wage": 34.0, "women_wage": 28.87, "avg_wage": 31.44, "wage_gap": 5.13, "gap_pct": 15.1}, {"period": "2022-H1", "geo": "MB", "men_wage": 29.0, "women_wage": 26.0, "avg_wage": 27.5, "wage_gap": 3.0, "gap_pct": 10.3}, {"period": "2022-H1", "geo": "NL", "men_wage": 30.77, "women_wage": 26.78, "avg_wage": 28.78, "wage_gap": 3.99, "gap_pct": 13.0}, {"period": "2022-H1", "geo": "NS", "men_wage": 27.31, "women_wage": 23.5, "avg_wage": 25.4, "wage_gap": 3.81, "gap_pct": 14.0}, {"period": "2022-H1", "geo": "SK", "men_wage": 33.7, "women_wage": 29.5, "avg_wage": 31.6, "wage_gap": 4.2, "gap_pct": 12.5}, {"period": "2022-H1", "geo": "PE", "men_wage": 26.0, "women_wage": 26.0, "avg_wage": 26.0, "wage_gap": 0.0, "gap_pct": 0.0}, {"period": "2022-H1", "geo": "NB", "men_wage": 26.5, "women_wage": 25.96, "avg_wage": 26.23, "wage_gap": 0.54, "gap_pct": 2.0}, {"period": "2022-H1", "geo": "QC", "men_wage": 30.97, "women_wage": 28.0, "avg_wage": 29.48, "wage_gap": 2.97, "gap_pct": 9.6}, {"period": "2021-H2", "geo": "AB", "men_wage": 35.9, "women_wage": 29.21, "avg_wage": 32.56, "wage_gap": 6.69, "gap_pct": 18.6}, {"period": "2021-H2", "geo": "BC", "men_wage": 34.0, "women_wage": 27.98, "avg_wage": 30.99, "wage_gap": 6.02, "gap_pct": 17.7}, {"period": "2021-H2", "geo": "OT", "men_wage": 33.05, "women_wage": 29.1, "avg_wage": 31.08, "wage_gap": 3.95, "gap_pct": 12.0}, {"period": "2021-H2", "geo": "MB", "men_wage": 29.0, "women_wage": 25.0, "avg_wage": 27.0, "wage_gap": 4.0, "gap_pct": 13.8}, {"period": "2021-H2", "geo": "NL", "men_wage": 29.37, "women_wage": 24.62, "avg_wage": 27.0, "wage_gap": 4.75, "gap_pct": 16.2}, {"period": "2021-H2", "geo": "NS", "men_wage": 26.92, "women_wage": 26.15, "avg_wage": 26.54, "wage_gap": 0.77, "gap_pct": 2.9}, {"period": "2021-H2", "geo": "SK", "men_wage": 31.0, "women_wage": 28.21, "avg_wage": 29.6, "wage_gap": 2.79, "gap_pct": 9.0}, {"period": "2021-H2", "geo": "PE", "men_wage": 25.0, "women_wage": 24.54, "avg_wage": 24.77, "wage_gap": 0.46, "gap_pct": 1.8}, {"period": "2021-H2", "geo": "NB", "men_wage": 26.07, "women_wage": 24.38, "avg_wage": 25.22, "wage_gap": 1.69, "gap_pct": 6.5}, {"period": "2021-H2", "geo": "QC", "men_wage": 39.0, "women_wage": 27.47, "avg_wage": 33.24, "wage_gap": 11.53, "gap_pct": 29.6}, {"period": "2021-H1", "geo": "AB", "men_wage": 36.0, "women_wage": 31.25, "avg_wage": 33.62, "wage_gap": 4.75, "gap_pct": 13.2}, {"period": "2021-H1", "geo": "BC", "men_wage": 33.65, "women_wage": 28.34, "avg_wage": 30.99, "wage_gap": 5.31, "gap_pct": 15.8}, {"period": "2021-H1", "geo": "OT", "men_wage": 32.21, "women_wage": 29.04, "avg_wage": 30.62, "wage_gap": 3.17, "gap_pct": 9.8}, {"period": "2021-H1", "geo": "MB", "men_wage": 28.85, "women_wage": 25.18, "avg_wage": 27.02, "wage_gap": 3.67, "gap_pct": 12.7}, {"period": "2021-H1", "geo": "NL", "men_wage": 32.21, "women_wage": 26.44, "avg_wage": 29.33, "wage_gap": 5.77, "gap_pct": 17.9}, {"period": "2021-H1", "geo": "NS", "men_wage": 25.46, "women_wage": 25.48, "avg_wage": 25.47, "wage_gap": -0.02, "gap_pct": -0.1}, {"period": "2021-H1", "geo": "SK", "men_wage": 32.0, "women_wage": 27.2, "avg_wage": 29.6, "wage_gap": 4.8, "gap_pct": 15.0}, {"period": "2021-H1", "geo": "PE", "men_wage": 24.04, "women_wage": 25.3, "avg_wage": 24.67, "wage_gap": -1.26, "gap_pct": -5.2}, {"period": "2021-H1", "geo": "NB", "men_wage": 25.0, "women_wage": 24.0, "avg_wage": 24.5, "wage_gap": 1.0, "gap_pct": 4.0}, {"period": "2021-H1", "geo": "QC", "men_wage": 30.0, "women_wage": 27.02, "avg_wage": 28.51, "wage_gap": 2.98, "gap_pct": 9.9}, {"period": "2020-H2", "geo": "AB", "men_wage": 35.0, "women_wage": 30.18, "avg_wage": 32.59, "wage_gap": 4.82, "gap_pct": 13.8}, {"period": "2020-H2", "geo": "BC", "men_wage": 31.25, "women_wage": 26.44, "avg_wage": 28.84, "wage_gap": 4.81, "gap_pct": 15.4}, {"period": "2020-H2", "geo": "OT", "men_wage": 31.57, "women_wage": 28.72, "avg_wage": 30.14, "wage_gap": 2.85, "gap_pct": 9.0}, {"period": "2020-H2", "geo": "MB", "men_wage": 27.41, "women_wage": 23.65, "avg_wage": 25.53, "wage_gap": 3.76, "gap_pct": 13.7}, {"period": "2020-H2", "geo": "NL", "men_wage": 28.85, "women_wage": 26.0, "avg_wage": 27.42, "wage_gap": 2.85, "gap_pct": 9.9}, {"period": "2020-H2", "geo": "NS", "men_wage": 25.8, "women_wage": 23.56, "avg_wage": 24.68, "wage_gap": 2.24, "gap_pct": 8.7}, {"period": "2020-H2", "geo": "SK", "men_wage": 32.0, "women_wage": 28.71, "avg_wage": 30.36, "wage_gap": 3.29, "gap_pct": 10.3}, {"period": "2020-H2", "geo": "PE", "men_wage": 23.08, "women_wage": 24.04, "avg_wage": 23.56, "wage_gap": -0.96, "gap_pct": -4.2}, {"period": "2020-H2", "geo": "NB", "men_wage": 25.64, "women_wage": 23.59, "avg_wage": 24.62, "wage_gap": 2.05, "gap_pct": 8.0}, {"period": "2020-H2", "geo": "QC", "men_wage": 30.0, "women_wage": 28.48, "avg_wage": 29.24, "wage_gap": 1.52, "gap_pct": 5.1}, {"period": "2020-H1", "geo": "AB", "men_wage": 34.62, "women_wage": 28.02, "avg_wage": 31.32, "wage_gap": 6.6, "gap_pct": 19.1}, {"period": "2020-H1", "geo": "BC", "men_wage": 31.0, "women_wage": 26.0, "avg_wage": 28.5, "wage_gap": 5.0, "gap_pct": 16.1}, {"period": "2020-H1", "geo": "OT", "men_wage": 31.25, "women_wage": 27.0, "avg_wage": 29.12, "wage_gap": 4.25, "gap_pct": 13.6}, {"period": "2020-H1", "geo": "MB", "men_wage": 27.5, "women_wage": 23.97, "avg_wage": 25.74, "wage_gap": 3.53, "gap_pct": 12.8}, {"period": "2020-H1", "geo": "NL", "men_wage": 30.0, "women_wage": 24.65, "avg_wage": 27.32, "wage_gap": 5.35, "gap_pct": 17.8}, {"period": "2020-H1", "geo": "NS", "men_wage": 25.0, "women_wage": 21.98, "avg_wage": 23.49, "wage_gap": 3.02, "gap_pct": 12.1}, {"period": "2020-H1", "geo": "SK", "men_wage": 31.59, "women_wage": 26.44, "avg_wage": 29.02, "wage_gap": 5.15, "gap_pct": 16.3}, {"period": "2020-H1", "geo": "PE", "men_wage": 23.28, "women_wage": 24.0, "avg_wage": 23.64, "wage_gap": -0.72, "gap_pct": -3.1}, {"period": "2020-H1", "geo": "NB", "men_wage": 24.51, "women_wage": 22.35, "avg_wage": 23.43, "wage_gap": 2.16, "gap_pct": 8.8}, {"period": "2020-H1", "geo": "QC", "men_wage": 28.85, "women_wage": 26.17, "avg_wage": 27.51, "wage_gap": 2.68, "gap_pct": 9.3}, {"period": "2019-H2", "geo": "AB", "men_wage": 35.0, "women_wage": 28.57, "avg_wage": 31.78, "wage_gap": 6.43, "gap_pct": 18.4}, {"period": "2019-H2", "geo": "BC", "men_wage": 30.58, "women_wage": 25.0, "avg_wage": 27.79, "wage_gap": 5.58, "gap_pct": 18.2}, {"period": "2019-H2", "geo": "OT", "men_wage": 30.0, "women_wage": 26.67, "avg_wage": 28.34, "wage_gap": 3.33, "gap_pct": 11.1}, {"period": "2019-H2", "geo": "MB", "men_wage": 26.5, "women_wage": 23.82, "avg_wage": 25.16, "wage_gap": 2.68, "gap_pct": 10.1}, {"period": "2019-H2", "geo": "NL", "men_wage": 28.85, "women_wage": 23.5, "avg_wage": 26.18, "wage_gap": 5.35, "gap_pct": 18.5}, {"period": "2019-H2", "geo": "NS", "men_wage": 24.67, "women_wage": 22.0, "avg_wage": 23.34, "wage_gap": 2.67, "gap_pct": 10.8}, {"period": "2019-H2", "geo": "SK", "men_wage": 30.0, "women_wage": 25.38, "avg_wage": 27.69, "wage_gap": 4.62, "gap_pct": 15.4}, {"period": "2019-H2", "geo": "PE", "men_wage": 21.88, "women_wage": 21.83, "avg_wage": 21.85, "wage_gap": 0.05, "gap_pct": 0.2}, {"period": "2019-H2", "geo": "NB", "men_wage": 24.0, "women_wage": 22.33, "avg_wage": 23.16, "wage_gap": 1.67, "gap_pct": 7.0}, {"period": "2019-H2", "geo": "QC", "men_wage": 28.0, "women_wage": 25.0, "avg_wage": 26.5, "wage_gap": 3.0, "gap_pct": 10.7}, {"period": "2019-H1", "geo": "AB", "men_wage": 34.0, "women_wage": 28.75, "avg_wage": 31.38, "wage_gap": 5.25, "gap_pct": 15.4}, {"period": "2019-H1", "geo": "BC", "men_wage": 30.0, "women_wage": 24.04, "avg_wage": 27.02, "wage_gap": 5.96, "gap_pct": 19.9}, {"period": "2019-H1", "geo": "OT", "men_wage": 29.81, "women_wage": 25.64, "avg_wage": 27.72, "wage_gap": 4.17, "gap_pct": 14.0}, {"period": "2019-H1", "geo": "MB", "men_wage": 26.0, "women_wage": 24.62, "avg_wage": 25.31, "wage_gap": 1.38, "gap_pct": 5.3}, {"period": "2019-H1", "geo": "NL", "men_wage": 28.0, "women_wage": 24.29, "avg_wage": 26.14, "wage_gap": 3.71, "gap_pct": 13.3}, {"period": "2019-H1", "geo": "NS", "men_wage": 25.18, "women_wage": 23.0, "avg_wage": 24.09, "wage_gap": 2.18, "gap_pct": 8.7}, {"period": "2019-H1", "geo": "SK", "men_wage": 31.0, "women_wage": 25.0, "avg_wage": 28.0, "wage_gap": 6.0, "gap_pct": 19.4}, {"period": "2019-H1", "geo": "PE", "men_wage": 23.18, "women_wage": 24.0, "avg_wage": 23.59, "wage_gap": -0.82, "gap_pct": -3.5}, {"period": "2019-H1", "geo": "NB", "men_wage": 24.62, "women_wage": 21.63, "avg_wage": 23.12, "wage_gap": 2.99, "gap_pct": 12.1}, {"period": "2019-H1", "geo": "QC", "men_wage": 27.69, "women_wage": 25.0, "avg_wage": 26.34, "wage_gap": 2.69, "gap_pct": 9.7}, {"period": "2018-H2", "geo": "AB", "men_wage": 33.3, "women_wage": 25.96, "avg_wage": 29.63, "wage_gap": 7.34, "gap_pct": 22.0}, {"period": "2018-H2", "geo": "BC", "men_wage": 31.0, "women_wage": 24.0, "avg_wage": 27.5, "wage_gap": 7.0, "gap_pct": 22.6}, {"period": "2018-H2", "geo": "OT", "men_wage": 28.85, "women_wage": 25.64, "avg_wage": 27.24, "wage_gap": 3.21, "gap_pct": 11.1}, {"period": "2018-H2", "geo": "MB", "men_wage": 25.0, "women_wage": 23.0, "avg_wage": 24.0, "wage_gap": 2.0, "gap_pct": 8.0}, {"period": "2018-H2", "geo": "NL", "men_wage": 27.5, "women_wage": 24.61, "avg_wage": 26.06, "wage_gap": 2.89, "gap_pct": 10.5}, {"period": "2018-H2", "geo": "NS", "men_wage": 25.0, "women_wage": 22.5, "avg_wage": 23.75, "wage_gap": 2.5, "gap_pct": 10.0}, {"period": "2018-H2", "geo": "SK", "men_wage": 30.51, "women_wage": 26.0, "avg_wage": 28.26, "wage_gap": 4.51, "gap_pct": 14.8}, {"period": "2018-H2", "geo": "PE", "men_wage": 22.15, "women_wage": 21.69, "avg_wage": 21.92, "wage_gap": 0.46, "gap_pct": 2.1}, {"period": "2018-H2", "geo": "NB", "men_wage": 23.0, "women_wage": 21.0, "avg_wage": 22.0, "wage_gap": 2.0, "gap_pct": 8.7}, {"period": "2018-H2", "geo": "QC", "men_wage": 25.71, "women_wage": 23.93, "avg_wage": 24.82, "wage_gap": 1.78, "gap_pct": 6.9}, {"period": "2018-H1", "geo": "AB", "men_wage": 33.27, "women_wage": 27.4, "avg_wage": 30.34, "wage_gap": 5.87, "gap_pct": 17.6}, {"period": "2018-H1", "geo": "BC", "men_wage": 30.0, "women_wage": 24.62, "avg_wage": 27.31, "wage_gap": 5.38, "gap_pct": 17.9}, {"period": "2018-H1", "geo": "OT", "men_wage": 28.85, "women_wage": 25.0, "avg_wage": 26.92, "wage_gap": 3.85, "gap_pct": 13.3}, {"period": "2018-H1", "geo": "MB", "men_wage": 26.44, "women_wage": 22.06, "avg_wage": 24.25, "wage_gap": 4.38, "gap_pct": 16.6}, {"period": "2018-H1", "geo": "NL", "men_wage": 28.85, "women_wage": 24.91, "avg_wage": 26.88, "wage_gap": 3.94, "gap_pct": 13.7}, {"period": "2018-H1", "geo": "NS", "men_wage": 25.0, "women_wage": 21.54, "avg_wage": 23.27, "wage_gap": 3.46, "gap_pct": 13.8}, {"period": "2018-H1", "geo": "SK", "men_wage": 30.29, "women_wage": 25.0, "avg_wage": 27.64, "wage_gap": 5.29, "gap_pct": 17.5}, {"period": "2018-H1", "geo": "PE", "men_wage": 22.0, "women_wage": 23.0, "avg_wage": 22.5, "wage_gap": -1.0, "gap_pct": -4.5}, {"period": "2018-H1", "geo": "NB", "men_wage": 23.08, "women_wage": 22.26, "avg_wage": 22.67, "wage_gap": 0.82, "gap_pct": 3.6}, {"period": "2018-H1", "geo": "QC", "men_wage": 23.92, "women_wage": 25.0, "avg_wage": 24.46, "wage_gap": -1.08, "gap_pct": -4.5}, {"period": "2017-H2", "geo": "AB", "men_wage": 33.65, "women_wage": 26.44, "avg_wage": 30.04, "wage_gap": 7.21, "gap_pct": 21.4}, {"period": "2017-H2", "geo": "BC", "men_wage": 29.33, "women_wage": 24.0, "avg_wage": 26.66, "wage_gap": 5.33, "gap_pct": 18.2}, {"period": "2017-H2", "geo": "OT", "men_wage": 27.9, "women_wage": 24.52, "avg_wage": 26.21, "wage_gap": 3.38, "gap_pct": 12.1}, {"period": "2017-H2", "geo": "MB", "men_wage": 26.0, "women_wage": 21.17, "avg_wage": 23.58, "wage_gap": 4.83, "gap_pct": 18.6}, {"period": "2017-H2", "geo": "NL", "men_wage": 26.37, "women_wage": 23.0, "avg_wage": 24.68, "wage_gap": 3.37, "gap_pct": 12.8}, {"period": "2017-H2", "geo": "NS", "men_wage": 24.25, "women_wage": 21.0, "avg_wage": 22.62, "wage_gap": 3.25, "gap_pct": 13.4}, {"period": "2017-H2", "geo": "SK", "men_wage": 29.0, "women_wage": 25.0, "avg_wage": 27.0, "wage_gap": 4.0, "gap_pct": 13.8}, {"period": "2017-H2", "geo": "PE", "men_wage": 20.75, "women_wage": 21.11, "avg_wage": 20.93, "wage_gap": -0.36, "gap_pct": -1.7}, {"period": "2017-H2", "geo": "NB", "men_wage": 22.44, "women_wage": 21.0, "avg_wage": 21.72, "wage_gap": 1.44, "gap_pct": 6.4}, {"period": "2017-H2", "geo": "QC", "men_wage": 26.05, "women_wage": 24.18, "avg_wage": 25.12, "wage_gap": 1.87, "gap_pct": 7.2}, {"period": "2017-H1", "geo": "AB", "men_wage": 33.74, "women_wage": 27.0, "avg_wage": 30.37, "wage_gap": 6.74, "gap_pct": 20.0}, {"period": "2017-H1", "geo": "BC", "men_wage": 28.57, "women_wage": 23.56, "avg_wage": 26.06, "wage_gap": 5.01, "gap_pct": 17.5}, {"period": "2017-H1", "geo": "OT", "men_wage": 28.28, "women_wage": 24.29, "avg_wage": 26.28, "wage_gap": 3.99, "gap_pct": 14.1}, {"period": "2017-H1", "geo": "MB", "men_wage": 25.0, "women_wage": 22.05, "avg_wage": 23.52, "wage_gap": 2.95, "gap_pct": 11.8}, {"period": "2017-H1", "geo": "NL", "men_wage": 28.82, "women_wage": 23.0, "avg_wage": 25.91, "wage_gap": 5.82, "gap_pct": 20.2}, {"period": "2017-H1", "geo": "NS", "men_wage": 25.0, "women_wage": 21.63, "avg_wage": 23.32, "wage_gap": 3.37, "gap_pct": 13.5}, {"period": "2017-H1", "geo": "SK", "men_wage": 30.0, "women_wage": 25.0, "avg_wage": 27.5, "wage_gap": 5.0, "gap_pct": 16.7}, {"period": "2017-H1", "geo": "PE", "men_wage": 21.96, "women_wage": 22.65, "avg_wage": 22.3, "wage_gap": -0.69, "gap_pct": -3.1}, {"period": "2017-H1", "geo": "NB", "men_wage": 23.5, "women_wage": 22.05, "avg_wage": 22.78, "wage_gap": 1.45, "gap_pct": 6.2}, {"period": "2017-H1", "geo": "QC", "men_wage": 26.67, "women_wage": 24.18, "avg_wage": 25.42, "wage_gap": 2.49, "gap_pct": 9.3}, {"period": "2016-H2", "geo": "AB", "men_wage": 33.65, "women_wage": 26.44, "avg_wage": 30.04, "wage_gap": 7.21, "gap_pct": 21.4}, {"period": "2016-H2", "geo": "BC", "men_wage": 29.91, "women_wage": 23.08, "avg_wage": 26.49, "wage_gap": 6.83, "gap_pct": 22.8}, {"period": "2016-H2", "geo": "OT", "men_wage": 28.0, "women_wage": 24.35, "avg_wage": 26.18, "wage_gap": 3.65, "gap_pct": 13.0}, {"period": "2016-H2", "geo": "MB", "men_wage": 24.14, "women_wage": 21.35, "avg_wage": 22.74, "wage_gap": 2.79, "gap_pct": 11.6}, {"period": "2016-H2", "geo": "NL", "men_wage": 26.86, "women_wage": 20.71, "avg_wage": 23.78, "wage_gap": 6.15, "gap_pct": 22.9}, {"period": "2016-H2", "geo": "NS", "men_wage": 24.52, "women_wage": 21.0, "avg_wage": 22.76, "wage_gap": 3.52, "gap_pct": 14.4}, {"period": "2016-H2", "geo": "SK", "men_wage": 30.0, "women_wage": 24.04, "avg_wage": 27.02, "wage_gap": 5.96, "gap_pct": 19.9}, {"period": "2016-H2", "geo": "PE", "men_wage": 21.35, "women_wage": 21.0, "avg_wage": 21.18, "wage_gap": 0.35, "gap_pct": 1.6}, {"period": "2016-H2", "geo": "NB", "men_wage": 22.5, "women_wage": 21.0, "avg_wage": 21.75, "wage_gap": 1.5, "gap_pct": 6.7}, {"period": "2016-H2", "geo": "QC", "men_wage": 25.78, "women_wage": 23.0, "avg_wage": 24.39, "wage_gap": 2.78, "gap_pct": 10.8}, {"period": "2016-H1", "geo": "AB", "men_wage": 33.65, "women_wage": 27.4, "avg_wage": 30.52, "wage_gap": 6.25, "gap_pct": 18.6}, {"period": "2016-H1", "geo": "BC", "men_wage": 29.85, "women_wage": 23.08, "avg_wage": 26.46, "wage_gap": 6.77, "gap_pct": 22.7}, {"period": "2016-H1", "geo": "OT", "men_wage": 28.0, "women_wage": 25.0, "avg_wage": 26.5, "wage_gap": 3.0, "gap_pct": 10.7}, {"period": "2016-H1", "geo": "MB", "men_wage": 25.0, "women_wage": 21.2, "avg_wage": 23.1, "wage_gap": 3.8, "gap_pct": 15.2}, {"period": "2016-H1", "geo": "NL", "men_wage": 28.85, "women_wage": 21.75, "avg_wage": 25.3, "wage_gap": 7.1, "gap_pct": 24.6}, {"period": "2016-H1", "geo": "NS", "men_wage": 24.0, "women_wage": 21.63, "avg_wage": 22.82, "wage_gap": 2.37, "gap_pct": 9.9}, {"period": "2016-H1", "geo": "SK", "men_wage": 30.0, "women_wage": 24.0, "avg_wage": 27.0, "wage_gap": 6.0, "gap_pct": 20.0}, {"period": "2016-H1", "geo": "PE", "men_wage": 22.0, "women_wage": 20.95, "avg_wage": 21.48, "wage_gap": 1.05, "gap_pct": 4.8}, {"period": "2016-H1", "geo": "NB", "men_wage": 23.0, "women_wage": 20.51, "avg_wage": 21.76, "wage_gap": 2.49, "gap_pct": 10.8}, {"period": "2016-H1", "geo": "QC", "men_wage": 26.0, "women_wage": 23.63, "avg_wage": 24.82, "wage_gap": 2.37, "gap_pct": 9.1}, {"period": "2015-H2", "geo": "AB", "men_wage": 33.0, "women_wage": 25.48, "avg_wage": 29.24, "wage_gap": 7.52, "gap_pct": 22.8}, {"period": "2015-H2", "geo": "BC", "men_wage": 28.37, "women_wage": 22.7, "avg_wage": 25.54, "wage_gap": 5.67, "gap_pct": 20.0}, {"period": "2015-H2", "geo": "OT", "men_wage": 28.0, "women_wage": 24.04, "avg_wage": 26.02, "wage_gap": 3.96, "gap_pct": 14.1}, {"period": "2015-H2", "geo": "MB", "men_wage": 24.0, "women_wage": 20.9, "avg_wage": 22.45, "wage_gap": 3.1, "gap_pct": 12.9}, {"period": "2015-H2", "geo": "NL", "men_wage": 28.0, "women_wage": 21.98, "avg_wage": 24.99, "wage_gap": 6.02, "gap_pct": 21.5}, {"period": "2015-H2", "geo": "NS", "men_wage": 23.5, "women_wage": 20.44, "avg_wage": 21.97, "wage_gap": 3.06, "gap_pct": 13.0}, {"period": "2015-H2", "geo": "SK", "men_wage": 29.67, "women_wage": 24.34, "avg_wage": 27.01, "wage_gap": 5.33, "gap_pct": 18.0}, {"period": "2015-H2", "geo": "PE", "men_wage": 22.0, "women_wage": 20.51, "avg_wage": 21.26, "wage_gap": 1.49, "gap_pct": 6.8}, {"period": "2015-H2", "geo": "NB", "men_wage": 22.4, "women_wage": 19.55, "avg_wage": 20.98, "wage_gap": 2.85, "gap_pct": 12.7}, {"period": "2015-H2", "geo": "QC", "men_wage": 25.0, "women_wage": 22.84, "avg_wage": 23.92, "wage_gap": 2.16, "gap_pct": 8.6}, {"period": "2015-H1", "geo": "AB", "men_wage": 32.0, "women_wage": 25.0, "avg_wage": 28.5, "wage_gap": 7.0, "gap_pct": 21.9}, {"period": "2015-H1", "geo": "BC", "men_wage": 28.0, "women_wage": 24.0, "avg_wage": 26.0, "wage_gap": 4.0, "gap_pct": 14.3}, {"period": "2015-H1", "geo": "OT", "men_wage": 23.44, "women_wage": 24.0, "avg_wage": 23.72, "wage_gap": -0.56, "gap_pct": -2.4}, {"period": "2015-H1", "geo": "MB", "men_wage": 24.76, "women_wage": 20.5, "avg_wage": 22.63, "wage_gap": 4.26, "gap_pct": 17.2}, {"period": "2015-H1", "geo": "NL", "men_wage": 29.5, "women_wage": 22.6, "avg_wage": 26.05, "wage_gap": 6.9, "gap_pct": 23.4}, {"period": "2015-H1", "geo": "NS", "men_wage": 24.04, "women_wage": 21.0, "avg_wage": 22.52, "wage_gap": 3.04, "gap_pct": 12.6}, {"period": "2015-H1", "geo": "SK", "men_wage": 29.97, "women_wage": 22.66, "avg_wage": 26.32, "wage_gap": 7.31, "gap_pct": 24.4}, {"period": "2015-H1", "geo": "PE", "men_wage": 22.31, "women_wage": 21.19, "avg_wage": 21.75, "wage_gap": 1.12, "gap_pct": 5.0}, {"period": "2015-H1", "geo": "NB", "men_wage": 23.08, "women_wage": 20.33, "avg_wage": 21.7, "wage_gap": 2.75, "gap_pct": 11.9}, {"period": "2015-H1", "geo": "QC", "men_wage": 24.04, "women_wage": 22.84, "avg_wage": 23.44, "wage_gap": 1.2, "gap_pct": 5.0}, {"period": "2014-H2", "geo": "AB", "men_wage": 31.73, "women_wage": 25.0, "avg_wage": 28.36, "wage_gap": 6.73, "gap_pct": 21.2}, {"period": "2014-H2", "geo": "BC", "men_wage": 27.1, "women_wage": 22.6, "avg_wage": 24.85, "wage_gap": 4.5, "gap_pct": 16.6}, {"period": "2014-H2", "geo": "OT", "men_wage": 26.0, "women_wage": 24.0, "avg_wage": 25.0, "wage_gap": 2.0, "gap_pct": 7.7}, {"period": "2014-H2", "geo": "MB", "men_wage": 24.0, "women_wage": 20.19, "avg_wage": 22.1, "wage_gap": 3.81, "gap_pct": 15.9}, {"period": "2014-H2", "geo": "NL", "men_wage": 27.5, "women_wage": 21.63, "avg_wage": 24.56, "wage_gap": 5.87, "gap_pct": 21.3}, {"period": "2014-H2", "geo": "NS", "men_wage": 23.5, "women_wage": 20.0, "avg_wage": 21.75, "wage_gap": 3.5, "gap_pct": 14.9}, {"period": "2014-H2", "geo": "SK", "men_wage": 29.0, "women_wage": 23.08, "avg_wage": 26.04, "wage_gap": 5.92, "gap_pct": 20.4}, {"period": "2014-H2", "geo": "PE", "men_wage": 20.19, "women_wage": 20.0, "avg_wage": 20.1, "wage_gap": 0.19, "gap_pct": 0.9}, {"period": "2014-H2", "geo": "NB", "men_wage": 20.0, "women_wage": 20.0, "avg_wage": 20.0, "wage_gap": 0.0, "gap_pct": 0.0}, {"period": "2014-H2", "geo": "QC", "men_wage": 24.5, "women_wage": 22.38, "avg_wage": 23.44, "wage_gap": 2.12, "gap_pct": 8.7}, {"period": "2014-H1", "geo": "AB", "men_wage": 31.5, "women_wage": 24.23, "avg_wage": 27.86, "wage_gap": 7.27, "gap_pct": 23.1}, {"period": "2014-H1", "geo": "BC", "men_wage": 28.0, "women_wage": 22.6, "avg_wage": 25.3, "wage_gap": 5.4, "gap_pct": 19.3}, {"period": "2014-H1", "geo": "OT", "men_wage": 25.64, "women_wage": 23.1, "avg_wage": 24.37, "wage_gap": 2.54, "gap_pct": 9.9}, {"period": "2014-H1", "geo": "MB", "men_wage": 23.59, "women_wage": 20.52, "avg_wage": 22.06, "wage_gap": 3.07, "gap_pct": 13.0}, {"period": "2014-H1", "geo": "NL", "men_wage": 30.22, "women_wage": 22.21, "avg_wage": 26.22, "wage_gap": 8.01, "gap_pct": 26.5}, {"period": "2014-H1", "geo": "NS", "men_wage": 23.0, "women_wage": 19.98, "avg_wage": 21.49, "wage_gap": 3.02, "gap_pct": 13.1}, {"period": "2014-H1", "geo": "SK", "men_wage": 27.5, "women_wage": 23.02, "avg_wage": 25.26, "wage_gap": 4.48, "gap_pct": 16.3}, {"period": "2014-H1", "geo": "PE", "men_wage": 20.56, "women_wage": 20.26, "avg_wage": 20.41, "wage_gap": 0.3, "gap_pct": 1.5}, {"period": "2014-H1", "geo": "NB", "men_wage": 21.0, "women_wage": 18.82, "avg_wage": 19.91, "wage_gap": 2.18, "gap_pct": 10.4}, {"period": "2014-H1", "geo": "QC", "men_wage": 25.0, "women_wage": 22.5, "avg_wage": 23.75, "wage_gap": 2.5, "gap_pct": 10.0}, {"period": "2013-H2", "geo": "AB", "men_wage": 30.0, "women_wage": 24.0, "avg_wage": 27.0, "wage_gap": 6.0, "gap_pct": 20.0}, {"period": "2013-H2", "geo": "BC", "men_wage": 27.5, "women_wage": 22.49, "avg_wage": 24.99, "wage_gap": 5.01, "gap_pct": 18.2}, {"period": "2013-H2", "geo": "OT", "men_wage": 26.0, "women_wage": 23.0, "avg_wage": 24.5, "wage_gap": 3.0, "gap_pct": 11.5}, {"period": "2013-H2", "geo": "MB", "men_wage": 23.0, "women_wage": 20.0, "avg_wage": 21.5, "wage_gap": 3.0, "gap_pct": 13.0}, {"period": "2013-H2", "geo": "NL", "men_wage": 25.27, "women_wage": 22.0, "avg_wage": 23.64, "wage_gap": 3.27, "gap_pct": 12.9}, {"period": "2013-H2", "geo": "NS", "men_wage": 22.5, "women_wage": 19.71, "avg_wage": 21.1, "wage_gap": 2.79, "gap_pct": 12.4}, {"period": "2013-H2", "geo": "SK", "men_wage": 27.0, "women_wage": 22.89, "avg_wage": 24.94, "wage_gap": 4.11, "gap_pct": 15.2}, {"period": "2013-H2", "geo": "PE", "men_wage": 19.71, "women_wage": 20.0, "avg_wage": 19.86, "wage_gap": -0.29, "gap_pct": -1.5}, {"period": "2013-H2", "geo": "NB", "men_wage": 21.0, "women_wage": 19.0, "avg_wage": 20.0, "wage_gap": 2.0, "gap_pct": 9.5}, {"period": "2013-H2", "geo": "QC", "men_wage": 24.0, "women_wage": 21.0, "avg_wage": 22.5, "wage_gap": 3.0, "gap_pct": 12.5}, {"period": "2013-H1", "geo": "AB", "men_wage": 30.0, "women_wage": 23.08, "avg_wage": 26.54, "wage_gap": 6.92, "gap_pct": 23.1}, {"period": "2013-H1", "geo": "BC", "men_wage": 28.0, "women_wage": 21.97, "avg_wage": 24.98, "wage_gap": 6.03, "gap_pct": 21.5}, {"period": "2013-H1", "geo": "OT", "men_wage": 26.44, "women_wage": 23.33, "avg_wage": 24.88, "wage_gap": 3.11, "gap_pct": 11.8}, {"period": "2013-H1", "geo": "MB", "men_wage": 22.56, "women_wage": 20.0, "avg_wage": 21.28, "wage_gap": 2.56, "gap_pct": 11.3}, {"period": "2013-H1", "geo": "NL", "men_wage": 27.0, "women_wage": 21.98, "avg_wage": 24.49, "wage_gap": 5.02, "gap_pct": 18.6}, {"period": "2013-H1", "geo": "NS", "men_wage": 22.0, "women_wage": 19.72, "avg_wage": 20.86, "wage_gap": 2.28, "gap_pct": 10.4}, {"period": "2013-H1", "geo": "SK", "men_wage": 28.0, "women_wage": 22.0, "avg_wage": 25.0, "wage_gap": 6.0, "gap_pct": 21.4}, {"period": "2013-H1", "geo": "PE", "men_wage": 21.15, "women_wage": 21.0, "avg_wage": 21.08, "wage_gap": 0.15, "gap_pct": 0.7}, {"period": "2013-H1", "geo": "NB", "men_wage": 21.98, "women_wage": 18.75, "avg_wage": 20.37, "wage_gap": 3.23, "gap_pct": 14.7}, {"period": "2013-H1", "geo": "QC", "men_wage": 24.99, "women_wage": 22.0, "avg_wage": 23.49, "wage_gap": 2.99, "gap_pct": 12.0}, {"period": "2012-H2", "geo": "AB", "men_wage": 29.81, "women_wage": 23.95, "avg_wage": 26.88, "wage_gap": 5.86, "gap_pct": 19.7}, {"period": "2012-H2", "geo": "BC", "men_wage": 26.44, "women_wage": 21.3, "avg_wage": 23.87, "wage_gap": 5.14, "gap_pct": 19.4}, {"period": "2012-H2", "geo": "OT", "men_wage": 26.0, "women_wage": 22.6, "avg_wage": 24.3, "wage_gap": 3.4, "gap_pct": 13.1}, {"period": "2012-H2", "geo": "MB", "men_wage": 23.0, "women_wage": 19.66, "avg_wage": 21.33, "wage_gap": 3.34, "gap_pct": 14.5}, {"period": "2012-H2", "geo": "NL", "men_wage": 25.0, "women_wage": 20.25, "avg_wage": 22.62, "wage_gap": 4.75, "gap_pct": 19.0}, {"period": "2012-H2", "geo": "NS", "men_wage": 21.15, "women_wage": 19.3, "avg_wage": 20.23, "wage_gap": 1.85, "gap_pct": 8.7}, {"period": "2012-H2", "geo": "SK", "men_wage": 26.44, "women_wage": 21.75, "avg_wage": 24.1, "wage_gap": 4.69, "gap_pct": 17.7}, {"period": "2012-H2", "geo": "PE", "men_wage": 20.0, "women_wage": 20.0, "avg_wage": 20.0, "wage_gap": 0.0, "gap_pct": 0.0}, {"period": "2012-H2", "geo": "NB", "men_wage": 20.0, "women_wage": 19.67, "avg_wage": 19.84, "wage_gap": 0.33, "gap_pct": 1.6}, {"period": "2012-H2", "geo": "QC", "men_wage": 23.0, "women_wage": 21.0, "avg_wage": 22.0, "wage_gap": 2.0, "gap_pct": 8.7}, {"period": "2012-H1", "geo": "AB", "men_wage": 29.81, "women_wage": 22.79, "avg_wage": 26.3, "wage_gap": 7.02, "gap_pct": 23.5}, {"period": "2012-H1", "geo": "BC", "men_wage": 27.0, "women_wage": 21.9, "avg_wage": 24.45, "wage_gap": 5.1, "gap_pct": 18.9}, {"period": "2012-H1", "geo": "OT", "men_wage": 25.0, "women_wage": 22.67, "avg_wage": 23.84, "wage_gap": 2.33, "gap_pct": 9.3}, {"period": "2012-H1", "geo": "MB", "men_wage": 23.0, "women_wage": 20.0, "avg_wage": 21.5, "wage_gap": 3.0, "gap_pct": 13.0}, {"period": "2012-H1", "geo": "NL", "men_wage": 26.17, "women_wage": 21.0, "avg_wage": 23.58, "wage_gap": 5.17, "gap_pct": 19.8}, {"period": "2012-H1", "geo": "NS", "men_wage": 22.3, "women_wage": 19.25, "avg_wage": 20.78, "wage_gap": 3.05, "gap_pct": 13.7}, {"period": "2012-H1", "geo": "SK", "men_wage": 26.5, "women_wage": 21.0, "avg_wage": 23.75, "wage_gap": 5.5, "gap_pct": 20.8}, {"period": "2012-H1", "geo": "PE", "men_wage": 20.19, "women_wage": 20.0, "avg_wage": 20.1, "wage_gap": 0.19, "gap_pct": 0.9}, {"period": "2012-H1", "geo": "NB", "men_wage": 21.0, "women_wage": 19.0, "avg_wage": 20.0, "wage_gap": 2.0, "gap_pct": 9.5}, {"period": "2012-H1", "geo": "QC", "men_wage": 24.04, "women_wage": 21.0, "avg_wage": 22.52, "wage_gap": 3.04, "gap_pct": 12.6}, {"period": "2011-H2", "geo": "AB", "men_wage": 28.0, "women_wage": 22.0, "avg_wage": 25.0, "wage_gap": 6.0, "gap_pct": 21.4}, {"period": "2011-H2", "geo": "BC", "men_wage": 26.2, "women_wage": 21.44, "avg_wage": 23.82, "wage_gap": 4.76, "gap_pct": 18.2}, {"period": "2011-H2", "geo": "OT", "men_wage": 25.0, "women_wage": 22.46, "avg_wage": 23.73, "wage_gap": 2.54, "gap_pct": 10.2}, {"period": "2011-H2", "geo": "MB", "men_wage": 22.0, "women_wage": 19.23, "avg_wage": 20.62, "wage_gap": 2.77, "gap_pct": 12.6}, {"period": "2011-H2", "geo": "NL", "men_wage": 22.5, "women_wage": 19.64, "avg_wage": 21.07, "wage_gap": 2.86, "gap_pct": 12.7}, {"period": "2011-H2", "geo": "NS", "men_wage": 20.0, "women_wage": 18.0, "avg_wage": 19.0, "wage_gap": 2.0, "gap_pct": 10.0}, {"period": "2011-H2", "geo": "SK", "men_wage": 25.0, "women_wage": 20.91, "avg_wage": 22.96, "wage_gap": 4.09, "gap_pct": 16.4}, {"period": "2011-H2", "geo": "PE", "men_wage": 18.75, "women_wage": 19.23, "avg_wage": 18.99, "wage_gap": -0.48, "gap_pct": -2.6}, {"period": "2011-H2", "geo": "NB", "men_wage": 19.97, "women_wage": 18.75, "avg_wage": 19.36, "wage_gap": 1.22, "gap_pct": 6.1}, {"period": "2011-H2", "geo": "QC", "men_wage": 22.6, "women_wage": 20.0, "avg_wage": 21.3, "wage_gap": 2.6, "gap_pct": 11.5}, {"period": "2011-H1", "geo": "AB", "men_wage": 29.0, "women_wage": 22.0, "avg_wage": 25.5, "wage_gap": 7.0, "gap_pct": 24.1}, {"period": "2011-H1", "geo": "BC", "men_wage": 25.96, "women_wage": 21.63, "avg_wage": 23.8, "wage_gap": 4.33, "gap_pct": 16.7}, {"period": "2011-H1", "geo": "OT", "men_wage": 25.0, "women_wage": 22.65, "avg_wage": 23.82, "wage_gap": 2.35, "gap_pct": 9.4}, {"period": "2011-H1", "geo": "MB", "men_wage": 22.5, "women_wage": 19.75, "avg_wage": 21.12, "wage_gap": 2.75, "gap_pct": 12.2}, {"period": "2011-H1", "geo": "NL", "men_wage": 24.04, "women_wage": 19.75, "avg_wage": 21.9, "wage_gap": 4.29, "gap_pct": 17.8}, {"period": "2011-H1", "geo": "NS", "men_wage": 20.39, "women_wage": 19.23, "avg_wage": 19.81, "wage_gap": 1.16, "gap_pct": 5.7}, {"period": "2011-H1", "geo": "SK", "men_wage": 25.48, "women_wage": 20.0, "avg_wage": 22.74, "wage_gap": 5.48, "gap_pct": 21.5}, {"period": "2011-H1", "geo": "PE", "men_wage": 19.24, "women_wage": 20.0, "avg_wage": 19.62, "wage_gap": -0.76, "gap_pct": -4.0}, {"period": "2011-H1", "geo": "NB", "men_wage": 20.09, "women_wage": 18.77, "avg_wage": 19.43, "wage_gap": 1.32, "gap_pct": 6.6}, {"period": "2011-H1", "geo": "QC", "men_wage": 23.0, "women_wage": 20.9, "avg_wage": 21.95, "wage_gap": 2.1, "gap_pct": 9.1}, {"period": "2010-H2", "geo": "AB", "men_wage": 28.02, "women_wage": 21.63, "avg_wage": 24.82, "wage_gap": 6.39, "gap_pct": 22.8}, {"period": "2010-H2", "geo": "BC", "men_wage": 26.0, "women_wage": 21.0, "avg_wage": 23.5, "wage_gap": 5.0, "gap_pct": 19.2}, {"period": "2010-H2", "geo": "OT", "men_wage": 25.0, "women_wage": 21.63, "avg_wage": 23.32, "wage_gap": 3.37, "gap_pct": 13.5}, {"period": "2010-H2", "geo": "MB", "men_wage": 21.63, "women_wage": 19.2, "avg_wage": 20.42, "wage_gap": 2.43, "gap_pct": 11.2}, {"period": "2010-H2", "geo": "NL", "men_wage": 20.19, "women_wage": 18.77, "avg_wage": 19.48, "wage_gap": 1.42, "gap_pct": 7.0}, {"period": "2010-H2", "geo": "NS", "men_wage": 20.6, "women_wage": 18.0, "avg_wage": 19.3, "wage_gap": 2.6, "gap_pct": 12.6}, {"period": "2010-H2", "geo": "SK", "men_wage": 25.0, "women_wage": 20.6, "avg_wage": 22.8, "wage_gap": 4.4, "gap_pct": 17.6}, {"period": "2010-H2", "geo": "PE", "men_wage": 17.54, "women_wage": 19.0, "avg_wage": 18.27, "wage_gap": -1.46, "gap_pct": -8.3}, {"period": "2010-H2", "geo": "NB", "men_wage": 19.75, "women_wage": 18.0, "avg_wage": 18.88, "wage_gap": 1.75, "gap_pct": 8.9}, {"period": "2010-H2", "geo": "QC", "men_wage": 23.0, "women_wage": 20.0, "avg_wage": 21.5, "wage_gap": 3.0, "gap_pct": 13.0}, {"period": "2010-H1", "geo": "AB", "men_wage": 28.5, "women_wage": 21.98, "avg_wage": 25.24, "wage_gap": 6.52, "gap_pct": 22.9}, {"period": "2010-H1", "geo": "BC", "men_wage": 26.0, "women_wage": 21.0, "avg_wage": 23.5, "wage_gap": 5.0, "gap_pct": 19.2}, {"period": "2010-H1", "geo": "OT", "men_wage": 25.0, "women_wage": 22.12, "avg_wage": 23.56, "wage_gap": 2.88, "gap_pct": 11.5}, {"period": "2010-H1", "geo": "MB", "men_wage": 22.0, "women_wage": 19.21, "avg_wage": 20.6, "wage_gap": 2.79, "gap_pct": 12.7}, {"period": "2010-H1", "geo": "NL", "men_wage": 23.0, "women_wage": 18.75, "avg_wage": 20.88, "wage_gap": 4.25, "gap_pct": 18.5}, {"period": "2010-H1", "geo": "NS", "men_wage": 21.96, "women_wage": 18.58, "avg_wage": 20.27, "wage_gap": 3.38, "gap_pct": 15.4}, {"period": "2010-H1", "geo": "SK", "men_wage": 25.77, "women_wage": 20.19, "avg_wage": 22.98, "wage_gap": 5.58, "gap_pct": 21.7}, {"period": "2010-H1", "geo": "PE", "men_wage": 18.27, "women_wage": 18.1, "avg_wage": 18.19, "wage_gap": 0.17, "gap_pct": 0.9}, {"period": "2010-H1", "geo": "NB", "men_wage": 20.54, "women_wage": 18.0, "avg_wage": 19.27, "wage_gap": 2.54, "gap_pct": 12.4}, {"period": "2010-H1", "geo": "QC", "men_wage": 23.27, "women_wage": 20.0, "avg_wage": 21.64, "wage_gap": 3.27, "gap_pct": 14.1}, {"period": "2009-H2", "geo": "AB", "men_wage": 27.8, "women_wage": 21.35, "avg_wage": 24.58, "wage_gap": 6.45, "gap_pct": 23.2}, {"period": "2009-H2", "geo": "BC", "men_wage": 25.48, "women_wage": 21.0, "avg_wage": 23.24, "wage_gap": 4.48, "gap_pct": 17.6}, {"period": "2009-H2", "geo": "OT", "men_wage": 24.04, "women_wage": 21.63, "avg_wage": 22.84, "wage_gap": 2.41, "gap_pct": 10.0}, {"period": "2009-H2", "geo": "MB", "men_wage": 21.0, "women_wage": 18.77, "avg_wage": 19.88, "wage_gap": 2.23, "gap_pct": 10.6}, {"period": "2009-H2", "geo": "NL", "men_wage": 20.0, "women_wage": 17.15, "avg_wage": 18.58, "wage_gap": 2.85, "gap_pct": 14.3}, {"period": "2009-H2", "geo": "NS", "men_wage": 20.68, "women_wage": 18.0, "avg_wage": 19.34, "wage_gap": 2.68, "gap_pct": 13.0}, {"period": "2009-H2", "geo": "SK", "men_wage": 23.91, "women_wage": 20.0, "avg_wage": 21.96, "wage_gap": 3.91, "gap_pct": 16.4}, {"period": "2009-H2", "geo": "PE", "men_wage": 17.5, "women_wage": 17.0, "avg_wage": 17.25, "wage_gap": 0.5, "gap_pct": 2.9}, {"period": "2009-H2", "geo": "NB", "men_wage": 20.0, "women_wage": 16.83, "avg_wage": 18.42, "wage_gap": 3.17, "gap_pct": 15.9}, {"period": "2009-H2", "geo": "QC", "men_wage": 22.63, "women_wage": 19.96, "avg_wage": 21.3, "wage_gap": 2.67, "gap_pct": 11.8}, {"period": "2009-H1", "geo": "AB", "men_wage": 28.85, "women_wage": 20.67, "avg_wage": 24.76, "wage_gap": 8.18, "gap_pct": 28.4}, {"period": "2009-H1", "geo": "BC", "men_wage": 26.0, "women_wage": 21.0, "avg_wage": 23.5, "wage_gap": 5.0, "gap_pct": 19.2}, {"period": "2009-H1", "geo": "OT", "men_wage": 25.0, "women_wage": 21.54, "avg_wage": 23.27, "wage_gap": 3.46, "gap_pct": 13.8}, {"period": "2009-H1", "geo": "MB", "men_wage": 21.55, "women_wage": 18.27, "avg_wage": 19.91, "wage_gap": 3.28, "gap_pct": 15.2}, {"period": "2009-H1", "geo": "NL", "men_wage": 22.0, "women_wage": 17.5, "avg_wage": 19.75, "wage_gap": 4.5, "gap_pct": 20.5}, {"period": "2009-H1", "geo": "NS", "men_wage": 20.0, "women_wage": 18.0, "avg_wage": 19.0, "wage_gap": 2.0, "gap_pct": 10.0}, {"period": "2009-H1", "geo": "SK", "men_wage": 25.0, "women_wage": 18.89, "avg_wage": 21.94, "wage_gap": 6.11, "gap_pct": 24.4}, {"period": "2009-H1", "geo": "PE", "men_wage": 18.81, "women_wage": 17.0, "avg_wage": 17.9, "wage_gap": 1.81, "gap_pct": 9.6}, {"period": "2009-H1", "geo": "NB", "men_wage": 19.28, "women_wage": 17.0, "avg_wage": 18.14, "wage_gap": 2.28, "gap_pct": 11.8}, {"period": "2009-H1", "geo": "QC", "men_wage": 22.0, "women_wage": 20.0, "avg_wage": 21.0, "wage_gap": 2.0, "gap_pct": 9.1}, {"period": "2008-H2", "geo": "AB", "men_wage": 27.1, "women_wage": 20.5, "avg_wage": 23.8, "wage_gap": 6.6, "gap_pct": 24.4}, {"period": "2008-H2", "geo": "BC", "men_wage": 24.44, "women_wage": 20.0, "avg_wage": 22.22, "wage_gap": 4.44, "gap_pct": 18.2}, {"period": "2008-H2", "geo": "OT", "men_wage": 24.04, "women_wage": 20.29, "avg_wage": 22.16, "wage_gap": 3.75, "gap_pct": 15.6}, {"period": "2008-H2", "geo": "MB", "men_wage": 20.0, "women_wage": 18.27, "avg_wage": 19.13, "wage_gap": 1.73, "gap_pct": 8.7}, {"period": "2008-H2", "geo": "NL", "men_wage": 20.0, "women_wage": 15.36, "avg_wage": 17.68, "wage_gap": 4.64, "gap_pct": 23.2}, {"period": "2008-H2", "geo": "NS", "men_wage": 19.0, "women_wage": 16.83, "avg_wage": 17.92, "wage_gap": 2.17, "gap_pct": 11.4}, {"period": "2008-H2", "geo": "SK", "men_wage": 23.5, "women_wage": 19.0, "avg_wage": 21.25, "wage_gap": 4.5, "gap_pct": 19.1}, {"period": "2008-H2", "geo": "PE", "men_wage": 17.5, "women_wage": 16.66, "avg_wage": 17.08, "wage_gap": 0.84, "gap_pct": 4.8}, {"period": "2008-H2", "geo": "NB", "men_wage": 18.96, "women_wage": 16.0, "avg_wage": 17.48, "wage_gap": 2.96, "gap_pct": 15.6}, {"period": "2008-H2", "geo": "QC", "men_wage": 21.2, "women_wage": 19.23, "avg_wage": 20.22, "wage_gap": 1.97, "gap_pct": 9.3}, {"period": "2008-H1", "geo": "AB", "men_wage": 26.54, "women_wage": 20.19, "avg_wage": 23.36, "wage_gap": 6.35, "gap_pct": 23.9}, {"period": "2008-H1", "geo": "BC", "men_wage": 25.0, "women_wage": 19.98, "avg_wage": 22.49, "wage_gap": 5.02, "gap_pct": 20.1}, {"period": "2008-H1", "geo": "OT", "men_wage": 24.0, "women_wage": 20.51, "avg_wage": 22.26, "wage_gap": 3.49, "gap_pct": 14.5}, {"period": "2008-H1", "geo": "MB", "men_wage": 20.0, "women_wage": 17.95, "avg_wage": 18.98, "wage_gap": 2.05, "gap_pct": 10.3}, {"period": "2008-H1", "geo": "NL", "men_wage": 20.0, "women_wage": 16.8, "avg_wage": 18.4, "wage_gap": 3.2, "gap_pct": 16.0}, {"period": "2008-H1", "geo": "NS", "men_wage": 20.0, "women_wage": 16.92, "avg_wage": 18.46, "wage_gap": 3.08, "gap_pct": 15.4}, {"period": "2008-H1", "geo": "SK", "men_wage": 23.08, "women_wage": 18.5, "avg_wage": 20.79, "wage_gap": 4.58, "gap_pct": 19.8}, {"period": "2008-H1", "geo": "PE", "men_wage": 17.0, "women_wage": 17.7, "avg_wage": 17.35, "wage_gap": -0.7, "gap_pct": -4.1}, {"period": "2008-H1", "geo": "NB", "men_wage": 19.0, "women_wage": 16.15, "avg_wage": 17.58, "wage_gap": 2.85, "gap_pct": 15.0}, {"period": "2008-H1", "geo": "QC", "men_wage": 20.94, "women_wage": 18.8, "avg_wage": 19.87, "wage_gap": 2.14, "gap_pct": 10.2}, {"period": "2007-H2", "geo": "AB", "men_wage": 25.96, "women_wage": 19.49, "avg_wage": 22.72, "wage_gap": 6.47, "gap_pct": 24.9}, {"period": "2007-H2", "geo": "BC", "men_wage": 24.0, "women_wage": 19.23, "avg_wage": 21.62, "wage_gap": 4.77, "gap_pct": 19.9}, {"period": "2007-H2", "geo": "OT", "men_wage": 24.0, "women_wage": 20.0, "avg_wage": 22.0, "wage_gap": 4.0, "gap_pct": 16.7}, {"period": "2007-H2", "geo": "MB", "men_wage": 20.19, "women_wage": 18.27, "avg_wage": 19.23, "wage_gap": 1.92, "gap_pct": 9.5}, {"period": "2007-H2", "geo": "NL", "men_wage": 19.05, "women_wage": 15.0, "avg_wage": 17.02, "wage_gap": 4.05, "gap_pct": 21.3}, {"period": "2007-H2", "geo": "NS", "men_wage": 19.0, "women_wage": 16.0, "avg_wage": 17.5, "wage_gap": 3.0, "gap_pct": 15.8}, {"period": "2007-H2", "geo": "SK", "men_wage": 21.88, "women_wage": 18.46, "avg_wage": 20.17, "wage_gap": 3.42, "gap_pct": 15.6}, {"period": "2007-H2", "geo": "PE", "men_wage": 15.9, "women_wage": 14.43, "avg_wage": 15.16, "wage_gap": 1.47, "gap_pct": 9.2}, {"period": "2007-H2", "geo": "NB", "men_wage": 17.5, "women_wage": 15.87, "avg_wage": 16.68, "wage_gap": 1.63, "gap_pct": 9.3}, {"period": "2007-H2", "geo": "QC", "men_wage": 21.25, "women_wage": 18.0, "avg_wage": 19.62, "wage_gap": 3.25, "gap_pct": 15.3}, {"period": "2007-H1", "geo": "AB", "men_wage": 25.0, "women_wage": 19.23, "avg_wage": 22.12, "wage_gap": 5.77, "gap_pct": 23.1}, {"period": "2007-H1", "geo": "BC", "men_wage": 23.62, "women_wage": 19.88, "avg_wage": 21.75, "wage_gap": 3.74, "gap_pct": 15.8}, {"period": "2007-H1", "geo": "OT", "men_wage": 23.0, "women_wage": 19.49, "avg_wage": 21.24, "wage_gap": 3.51, "gap_pct": 15.3}, {"period": "2007-H1", "geo": "MB", "men_wage": 20.0, "women_wage": 17.0, "avg_wage": 18.5, "wage_gap": 3.0, "gap_pct": 15.0}, {"period": "2007-H1", "geo": "NL", "men_wage": 19.0, "women_wage": 15.75, "avg_wage": 17.38, "wage_gap": 3.25, "gap_pct": 17.1}, {"period": "2007-H1", "geo": "NS", "men_wage": 19.0, "women_wage": 16.0, "avg_wage": 17.5, "wage_gap": 3.0, "gap_pct": 15.8}, {"period": "2007-H1", "geo": "SK", "men_wage": 21.39, "women_wage": 18.0, "avg_wage": 19.7, "wage_gap": 3.39, "gap_pct": 15.8}, {"period": "2007-H1", "geo": "PE", "men_wage": 16.55, "women_wage": 16.0, "avg_wage": 16.27, "wage_gap": 0.55, "gap_pct": 3.3}, {"period": "2007-H1", "geo": "NB", "men_wage": 17.79, "women_wage": 15.15, "avg_wage": 16.47, "wage_gap": 2.64, "gap_pct": 14.8}, {"period": "2007-H1", "geo": "QC", "men_wage": 20.64, "women_wage": 18.0, "avg_wage": 19.32, "wage_gap": 2.64, "gap_pct": 12.8}, {"period": "2006-H2", "geo": "AB", "men_wage": 24.04, "women_wage": 18.41, "avg_wage": 21.22, "wage_gap": 5.63, "gap_pct": 23.4}, {"period": "2006-H2", "geo": "BC", "men_wage": 22.53, "women_wage": 18.0, "avg_wage": 20.26, "wage_gap": 4.53, "gap_pct": 20.1}, {"period": "2006-H2", "geo": "OT", "men_wage": 22.54, "women_wage": 19.37, "avg_wage": 20.96, "wage_gap": 3.17, "gap_pct": 14.1}, {"period": "2006-H2", "geo": "MB", "men_wage": 18.5, "women_wage": 16.83, "avg_wage": 17.66, "wage_gap": 1.67, "gap_pct": 9.0}, {"period": "2006-H2", "geo": "NL", "men_wage": 18.0, "women_wage": 12.95, "avg_wage": 15.48, "wage_gap": 5.05, "gap_pct": 28.1}, {"period": "2006-H2", "geo": "NS", "men_wage": 18.19, "women_wage": 15.0, "avg_wage": 16.6, "wage_gap": 3.19, "gap_pct": 17.5}, {"period": "2006-H2", "geo": "SK", "men_wage": 20.04, "women_wage": 17.5, "avg_wage": 18.77, "wage_gap": 2.54, "gap_pct": 12.7}, {"period": "2006-H2", "geo": "PE", "men_wage": 15.75, "women_wage": 15.0, "avg_wage": 15.38, "wage_gap": 0.75, "gap_pct": 4.8}, {"period": "2006-H2", "geo": "NB", "men_wage": 16.83, "women_wage": 14.35, "avg_wage": 15.59, "wage_gap": 2.48, "gap_pct": 14.7}, {"period": "2006-H2", "geo": "QC", "men_wage": 19.87, "women_wage": 18.0, "avg_wage": 18.94, "wage_gap": 1.87, "gap_pct": 9.4}];
+const PERIODS = ["2006-H2", "2007-H1", "2007-H2", "2008-H1", "2008-H2", "2009-H1", "2009-H2", "2010-H1", "2010-H2", "2011-H1", "2011-H2", "2012-H1", "2012-H2", "2013-H1", "2013-H2", "2014-H1", "2014-H2", "2015-H1", "2015-H2", "2016-H1", "2016-H2", "2017-H1", "2017-H2", "2018-H1", "2018-H2", "2019-H1", "2019-H2", "2020-H1", "2020-H2", "2021-H1", "2021-H2", "2022-H1", "2022-H2", "2023-H1", "2023-H2", "2024-H1", "2024-H2", "2025-H1", "2025-H2", "2026-H1"];
+const Y_MIN = 11.91;
+const Y_MAX = 43.04;
+
+const PROVINCES = ['AB','BC','OT','MB','NL','NS','SK','PE','NB','QC'];
+const PROV_COLORS = {
+  AB:'#4f8ef7', BC:'#f97316', OT:'#a78bfa', MB:'#34d399',
+  NL:'#f43f5e', NS:'#facc15', SK:'#38bdf8', PE:'#fb7185',
+  NB:'#a3e635', QC:'#818cf8'
+};
+
+const byPeriod = {};
+RAW_DATA.forEach(d => {
+  if (!byPeriod[d.period]) byPeriod[d.period] = {};
+  byPeriod[d.period][d.geo] = d;
+});
+
+let currentIdx = PERIODS.length - 1;
+let playing = false;
+let timer = null;
+
+const scrubber = document.getElementById('scrubber');
+scrubber.max = PERIODS.length - 1;
+scrubber.value = currentIdx;
+scrubber.addEventListener('input', () => { currentIdx = +scrubber.value; render(); });
+
+const playBtn = document.getElementById('playBtn');
+playBtn.addEventListener('click', () => {
+  playing = !playing;
+  playBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+  if (playing) {
+    if (currentIdx >= PERIODS.length - 1) currentIdx = 0;
+    tick();
+  } else { clearTimeout(timer); }
+});
+
+function tick() {
+  if (!playing) return;
+  currentIdx++;
+  if (currentIdx >= PERIODS.length) {
+    currentIdx = PERIODS.length - 1;
+    playing = false;
+    playBtn.innerHTML = '&#9654;';
+    render(); return;
+  }
+  scrubber.value = currentIdx;
+  render();
+  timer = setTimeout(tick, 1000);
+}
+
+function render() {
+  document.getElementById('periodLabel').textContent = PERIODS[currentIdx];
+  renderCandleChart();
+  updateSideCard();
+}
+
+function updateSideCard() {
+  const period = PERIODS[currentIdx];
+  const rows = PROVINCES.map(p => byPeriod[period][p]).filter(Boolean);
+
+  const widest = rows.reduce((a,b) => Math.abs(b.wage_gap) > Math.abs(a.wage_gap) ? b : a);
+  const narrowest = rows.reduce((a,b) => Math.abs(b.wage_gap) < Math.abs(a.wage_gap) ? b : a);
+  const avgGap = d3.mean(rows, d => d.wage_gap);
+
+  const wpEl = document.getElementById('si-widest-prov');
+  wpEl.textContent = widest.geo;
+  wpEl.style.color = PROV_COLORS[widest.geo];
+
+  document.getElementById('si-widest-amt').textContent =
+    (widest.wage_gap >= 0 ? '+' : '') + '$' + widest.wage_gap.toFixed(2) + '/hr';
+  document.getElementById('si-widest-amt').style.color = widest.wage_gap >= 0 ? '#d97706' : '#2a6140';
+  document.getElementById('si-widest-sub').textContent =
+    (widest.wage_gap >= 0 ? 'Men out-earn women' : 'Women out-earn men') +
+    ' by $' + Math.abs(widest.wage_gap).toFixed(2) + '. ' + Math.abs(widest.gap_pct) + '% gap.';
+
+  const avgEl = document.getElementById('si-avg-amt');
+  avgEl.textContent = (avgGap >= 0 ? '+' : '') + '$' + avgGap.toFixed(2) + '/hr';
+  avgEl.style.color = avgGap >= 0 ? '#d97706' : '#2a6140';
+
+  const npEl = document.getElementById('si-narrowest-prov');
+  npEl.textContent = narrowest.geo;
+  npEl.style.color = PROV_COLORS[narrowest.geo];
+  document.getElementById('si-narrowest-amt').textContent =
+    (narrowest.wage_gap >= 0 ? '+' : '') + '$' + Math.abs(narrowest.wage_gap).toFixed(2) + '/hr';
+  document.getElementById('si-narrowest-amt').style.color = narrowest.wage_gap >= 0 ? '#d97706' : '#2a6140';
+  document.getElementById('si-narrowest-sub').textContent = Math.abs(narrowest.gap_pct) + '% wage gap.';
+}
+
+function renderCandleChart() {
+  const period = PERIODS[currentIdx];
+  const periodData = byPeriod[period];
+  const rows = PROVINCES.map(p => periodData[p]).filter(Boolean);
+
+  const container = document.getElementById('candleChart');
+  const W = container.offsetWidth || 700;
+  const margin = { top: 24, right: 10, bottom: 52, left: 52 };
+  const H = 420;
+  const w = W - margin.left - margin.right;
+  const h = H - margin.top - margin.bottom;
+
+
+  d3.select(container).selectAll('*').remove();
+  const svg = d3.select(container).append('svg').attr('width', W).attr('height', H);
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const xScale = d3.scaleBand().domain(PROVINCES).range([0, w]).padding(0.35);
+  const yScale = d3.scaleLinear().domain([Y_MIN, Y_MAX]).range([h, 0]);
+
+  // Gridlines
+  g.append('g')
+    .call(d3.axisLeft(yScale).ticks(7).tickSize(-w).tickFormat(''))
+    .call(g => g.select('.domain').remove())
+    .selectAll('line').attr('stroke', '#e0dfd8').attr('stroke-dasharray', '3,3');
+
+  const candleW = xScale.bandwidth();
+
+  rows.forEach(d => {
+    const cx = xScale(d.geo) + candleW / 2;
+    const upper = Math.max(d.men_wage, d.women_wage);
+    const lower = Math.min(d.men_wage, d.women_wage);
+    const mid = d.avg_wage;
+    const menOnTop = d.men_wage >= d.women_wage;
+
+    const yUpper = yScale(upper);
+    const yLower = yScale(lower);
+    const yMid = yScale(mid);
+    const bodyH = Math.max(yLower - yUpper, 4);
+    const provColor = PROV_COLORS[d.geo];
+
+    // --- MAIN BODY: solid province colour ---
+    g.append('rect')
+      .attr('x', xScale(d.geo)).attr('y', yUpper)
+      .attr('width', candleW).attr('height', bodyH)
+      .attr('fill', provColor)
+      .attr('rx', 3);
+
+
+
+    // --- MIDPOINT LINE ---
+    g.append('line')
+      .attr('x1', xScale(d.geo)).attr('x2', xScale(d.geo) + candleW)
+      .attr('y1', yMid).attr('y2', yMid)
+      .attr('stroke', '#1a1a18').attr('stroke-width', 2.5);
+
+    // --- WAGE LABELS ---
+    // Top label
+    g.append('text')
+      .attr('x', cx).attr('y', yUpper - 8)
+      .attr('text-anchor', 'middle').attr('font-size', 10.5).attr('font-weight', 700)
+      .attr('fill', menOnTop ? '#1a5fa8' : '#b5294e')
+      .text('$' + upper.toFixed(2));
+
+    // Bottom label
+    g.append('text')
+      .attr('x', cx).attr('y', yLower + 16)
+      .attr('text-anchor', 'middle').attr('font-size', 10.5).attr('font-weight', 700)
+      .attr('fill', menOnTop ? '#b5294e' : '#1a5fa8')
+      .text('$' + lower.toFixed(2));
+
+    // --- GAP LABEL under province name ---
+    const gapText = (d.wage_gap >= 0 ? '+' : '') + '$' + d.wage_gap.toFixed(2);
+    g.append('text')
+      .attr('x', cx).attr('y', h + 40)
+      .attr('text-anchor', 'middle').attr('font-size', 11).attr('font-weight', 600)
+      .attr('fill', d.wage_gap >= 0 ? '#d97706' : '#2a6140')
+      .text(gapText);
+  });
+
+  // X axis
+  g.append('g').attr('transform', `translate(0,${h+4})`)
+    .call(d3.axisBottom(xScale).tickSize(0))
+    .call(g => g.select('.domain').remove())
+    .selectAll('text')
+    .attr('font-size', 13).attr('font-weight', 700).attr('fill', '#1a1a18');
+
+  // Y axis
+  g.append('g')
+    .call(d3.axisLeft(yScale).ticks(7).tickFormat(d => '$' + d))
+    .call(g => g.select('.domain').remove())
+    .selectAll('text').attr('font-size', 12).attr('fill', '#6b6b65');
+
+  g.append('text').attr('transform', 'rotate(-90)')
+    .attr('x', -h/2).attr('y', -40)
+    .attr('text-anchor', 'middle').attr('font-size', 12).attr('fill', '#6b6b65')
+    .text('Median Hourly Wage (CAD)');
+}
+
+render();
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>

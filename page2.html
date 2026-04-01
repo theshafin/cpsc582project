@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canadian Labour Market - Economic Shocks</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f9f8f5;--card:#fff;--text:#1a1a18;--muted:#6b6b65;
+  --border:#e0dfd8;--accent:#2a6140;--men:#1a5fa8;--women:#b5294e;
+  --shadow:0 1px 4px rgba(0,0,0,.08)
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+/* NAV */
+.nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;position:sticky;top:0;z-index:100;height:52px}
+.nav-title{font-size:13px;font-weight:600;margin-right:28px;white-space:nowrap}
+.nav-pages{display:flex;height:100%}
+.nav-page{height:100%;display:flex;align-items:center;padding:0 14px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none;white-space:nowrap}
+.nav-page.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
+.nav-page.disabled{opacity:.4;cursor:default;pointer-events:none}
+
+/* PAGE HEADER */
+.page-header{padding:28px 32px 14px;max-width:1280px;margin:0 auto}
+.page-header h1{font-size:22px;font-weight:700;margin-bottom:4px}
+.page-header p{font-size:13px;color:var(--muted);max-width:720px;line-height:1.6}
+
+/* ── EVENT SUMMARY - sits above controls ── */
+.event-summary{max-width:1280px;margin:0 auto 16px;padding:0 32px}
+.event-summary-inner{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:16px 24px;box-shadow:var(--shadow)
+}
+.ev-info{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ev-info h3{font-size:14px;font-weight:700}
+.ev-info p{font-size:13px;color:var(--muted);line-height:1.65;flex:1;min-width:300px}
+.ev-badge{display:inline-block;padding:2px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;flex-shrink:0}
+.badge-recession{background:#fef3c7;color:#92400e}
+.badge-oil      {background:#ffedd5;color:#9a3412}
+.badge-pandemic {background:#fce7f3;color:#9d174d}
+.badge-inflation{background:#ede9fe;color:#5b21b6}
+.badge-tariff   {background:#dcfce7;color:#166634}
+
+/* ── CONTROLS ── */
+.controls{max-width:1280px;margin:0 auto;padding:0 32px 18px;display:flex;flex-direction:column;gap:14px}
+.ctrl-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
+
+/* Event buttons */
+.event-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.event-btn{
+  padding:8px 16px;font-size:12px;font-weight:500;
+  border:1.5px solid var(--border);border-radius:8px;
+  background:var(--card);cursor:pointer;color:var(--muted);
+  transition:all .15s;line-height:1.3;text-align:left
+}
+.event-btn:hover:not(.active){background:#f0efe9;border-color:#bbb}
+.event-btn.active.recession{background:#fef3c7;border-color:#d97706;color:#92400e;font-weight:600}
+.event-btn.active.oil      {background:#ffedd5;border-color:#ea580c;color:#9a3412;font-weight:600}
+.event-btn.active.pandemic {background:#fce7f3;border-color:#db2777;color:#9d174d;font-weight:600}
+.event-btn.active.inflation{background:#ede9fe;border-color:#7c3aed;color:#5b21b6;font-weight:600}
+.event-btn.active.tariff   {background:#dcfce7;border-color:#16a34a;color:#166534;font-weight:600}
+.event-btn-year{display:block;font-size:10px;opacity:.7;margin-top:1px}
+
+/* Province buttons */
+.prov-row{display:flex;gap:7px;flex-wrap:wrap}
+.prov-btn{
+  padding:5px 13px;font-size:12px;font-weight:500;
+  border:1.5px solid var(--border);border-radius:6px;
+  background:var(--card);cursor:pointer;color:var(--muted);
+  transition:all .15s
+}
+.prov-btn:hover:not(.active){background:#f0efe9}
+.prov-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* Metric toggle */
+.metric-toggle{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;width:fit-content}
+.metric-btn{
+  padding:6px 18px;font-size:12px;font-weight:500;border:none;
+  background:transparent;cursor:pointer;color:var(--muted);transition:all .15s
+}
+.metric-btn.active{background:var(--text);color:#fff}
+.metric-btn:not(.active):hover{background:var(--border)}
+
+/* CHART AREA */
+.chart-area{max-width:1280px;margin:0 auto;padding:0 32px 60px}
+.chart-prov-bar{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:14px;font-size:13px;font-weight:600
+}
+.chart-prov-bar span.sub{color:var(--muted);font-weight:400;font-size:12px}
+.chart-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px 14px;box-shadow:var(--shadow)}
+.chart-card-header{display:flex;align-items:center;gap:7px;margin-bottom:12px}
+.gender-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.chart-card-title{font-size:12px;font-weight:700}
+
+/* ANNOTATION LIST - below each chart card */
+.ann-list{margin-top:10px;padding:0 2px}
+.ann-list-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+.ann-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:12px;color:var(--muted);line-height:1.45}
+.ann-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.ann-period{font-family:'Courier New',monospace;font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px;flex-shrink:0}
+.ann-text{color:var(--text)}
+.axis text{font-size:10px;fill:var(--muted)}
+.axis path,.axis line{stroke:var(--border)}
+.grid line{stroke:#ebebeb;stroke-dasharray:3,3}
+.grid path{stroke-width:0}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-title">&#127809; Canadian Labour Market</span>
+  <div class="nav-pages">
+    <a class="nav-page" href="index.html">1. National Overview</a>
+    <a class="nav-page active" href="page2.html">2. Economic Shocks</a>
+    <a class="nav-page" href="page3.html">3. Gender Wage Gap</a>
+    <a class="nav-page" href="page4.html">4. Hours Worked</a>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1>How Economic Shocks Shaped Labour Outcomes by Gender</h1>
+  <p>Select an event and a province. The full 20-year trend is shown - the shock period is highlighted so you can see before, during, and after. Toggle between employment rate and wages.</p>
+</div>
+
+<!-- EVENT SUMMARY - above all controls -->
+<div class="event-summary">
+  <div class="event-summary-inner" id="ev-summary"></div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div>
+    <div class="ctrl-label">Economic event</div>
+    <div class="event-buttons">
+      <button class="event-btn recession active" data-event="gfc">
+        2008-09 Global Financial Crisis
+        <span class="event-btn-year">Great Recession</span>
+      </button>
+      <button class="event-btn oil" data-event="oil">
+        Oil Price Crash
+        <span class="event-btn-year">2014-2016</span>
+      </button>
+      <button class="event-btn pandemic" data-event="covid">
+        COVID-19 Pandemic
+        <span class="event-btn-year">2020-2022</span>
+      </button>
+      <button class="event-btn inflation" data-event="inflation">
+        Post-COVID Inflation Surge
+        <span class="event-btn-year">2022-2023</span>
+      </button>
+      <button class="event-btn tariff" data-event="tariff">
+        US-Canada Trade &amp; Tariff Shock
+        <span class="event-btn-year">2025</span>
+      </button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+    <div>
+      <div class="ctrl-label">Province - select one</div>
+      <div class="prov-row" id="prov-row">
+        <button class="prov-btn active" data-prov="AB">Alberta</button>
+        <button class="prov-btn" data-prov="BC">B.C.</button>
+        <button class="prov-btn" data-prov="OT">Ontario</button>
+        <button class="prov-btn" data-prov="QC">Québec</button>
+        <button class="prov-btn" data-prov="SK">Saskatchewan</button>
+        <button class="prov-btn" data-prov="MB">Manitoba</button>
+        <button class="prov-btn" data-prov="NL">Newfoundland</button>
+        <button class="prov-btn" data-prov="NS">Nova Scotia</button>
+        <button class="prov-btn" data-prov="NB">New Brunswick</button>
+        <button class="prov-btn" data-prov="PE">P.E.I.</button>
+      </div>
+    </div>
+    <div>
+      <div class="ctrl-label">Metric</div>
+      <div class="metric-toggle">
+        <button class="metric-btn active" data-metric="emp_rate">Employment rate</button>
+        <button class="metric-btn" data-metric="wage">Hourly wage</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="chart-area">
+  <div class="chart-prov-bar">
+    <span id="prov-label-text">Alberta</span>
+    <span class="sub">· Full time horizon 2006-2026 · Shaded band = shock period</span>
+  </div>
+  <div class="chart-cols">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="gender-dot" style="background:var(--men)"></div>
+        <span class="chart-card-title" id="title-men">Men - Employment Rate (%)</span>
+      </div>
+      <svg id="c-men" style="width:100%;display:block;height:280px"></svg>
+      <div class="ann-list" id="ann-men"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="gender-dot" style="background:var(--women)"></div>
+        <span class="chart-card-title" id="title-women">Women - Employment Rate (%)</span>
+      </div>
+      <svg id="c-women" style="width:100%;display:block;height:280px"></svg>
+      <div class="ann-list" id="ann-women"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MEN_DATA=[{"period":"2006-H2","province":"AB","emp_rate":91.9,"wage":24.04,"hours":44.9},{"period":"2006-H2","province":"BC","emp_rate":85.9,"wage":22.53,"hours":42.6},{"period":"2006-H2","province":"MB","emp_rate":89.7,"wage":18.5,"hours":44.1},{"period":"2006-H2","province":"NB","emp_rate":78.4,"wage":16.83,"hours":43.6},{"period":"2006-H2","province":"NL","emp_rate":71.5,"wage":18.0,"hours":45.9},{"period":"2006-H2","province":"NS","emp_rate":81.3,"wage":18.19,"hours":43.4},{"period":"2006-H2","province":"OT","emp_rate":87.2,"wage":22.54,"hours":42.4},{"period":"2006-H2","province":"PE","emp_rate":81.8,"wage":15.75,"hours":46.0},{"period":"2006-H2","province":"QC","emp_rate":84.2,"wage":19.87,"hours":41.1},{"period":"2006-H2","province":"SK","emp_rate":88.8,"wage":20.04,"hours":45.4},{"period":"2007-H1","province":"AB","emp_rate":92.1,"wage":25.0,"hours":44.4},{"period":"2007-H1","province":"BC","emp_rate":87.5,"wage":23.62,"hours":42.5},{"period":"2007-H1","province":"MB","emp_rate":89.8,"wage":20.0,"hours":42.7},{"period":"2007-H1","province":"NB","emp_rate":79.4,"wage":17.79,"hours":43.3},{"period":"2007-H1","province":"NL","emp_rate":71.5,"wage":19.0,"hours":46.4},{"period":"2007-H1","province":"NS","emp_rate":81.6,"wage":19.0,"hours":43.4},{"period":"2007-H1","province":"OT","emp_rate":86.3,"wage":23.0,"hours":42.0},{"period":"2007-H1","province":"PE","emp_rate":80.5,"wage":16.55,"hours":45.1},{"period":"2007-H1","province":"QC","emp_rate":84.4,"wage":20.64,"hours":40.8},{"period":"2007-H1","province":"SK","emp_rate":91.4,"wage":21.39,"hours":43.9},{"period":"2007-H2","province":"AB","emp_rate":92.4,"wage":25.96,"hours":44.7},{"period":"2007-H2","province":"BC","emp_rate":86.7,"wage":24.0,"hours":42.5},{"period":"2007-H2","province":"MB","emp_rate":88.8,"wage":20.19,"hours":43.2},{"period":"2007-H2","province":"NB","emp_rate":81.0,"wage":17.5,"hours":43.6},{"period":"2007-H2","province":"NL","emp_rate":72.8,"wage":19.05,"hours":45.3},{"period":"2007-H2","province":"NS","emp_rate":82.1,"wage":19.0,"hours":43.4},{"period":"2007-H2","province":"OT","emp_rate":86.1,"wage":24.0,"hours":42.5},{"period":"2007-H2","province":"PE","emp_rate":80.7,"wage":15.9,"hours":45.0},{"period":"2007-H2","province":"QC","emp_rate":84.5,"wage":21.25,"hours":41.0},{"period":"2007-H2","province":"SK","emp_rate":91.5,"wage":21.88,"hours":45.4},{"period":"2008-H1","province":"AB","emp_rate":92.2,"wage":26.54,"hours":44.0},{"period":"2008-H1","province":"BC","emp_rate":87.3,"wage":25.0,"hours":42.3},{"period":"2008-H1","province":"MB","emp_rate":91.3,"wage":20.0,"hours":42.6},{"period":"2008-H1","province":"NB","emp_rate":81.0,"wage":19.0,"hours":42.6},{"period":"2008-H1","province":"NL","emp_rate":75.6,"wage":20.0,"hours":44.7},{"period":"2008-H1","province":"NS","emp_rate":82.3,"wage":20.0,"hours":43.6},{"period":"2008-H1","province":"OT","emp_rate":86.4,"wage":24.0,"hours":42.0},{"period":"2008-H1","province":"PE","emp_rate":82.1,"wage":17.0,"hours":44.8},{"period":"2008-H1","province":"QC","emp_rate":84.6,"wage":20.94,"hours":41.0},{"period":"2008-H1","province":"SK","emp_rate":90.2,"wage":23.08,"hours":44.3},{"period":"2008-H2","province":"AB","emp_rate":91.3,"wage":27.1,"hours":43.9},{"period":"2008-H2","province":"BC","emp_rate":87.8,"wage":24.44,"hours":42.3},{"period":"2008-H2","province":"MB","emp_rate":92.0,"wage":20.0,"hours":43.3},{"period":"2008-H2","province":"NB","emp_rate":81.6,"wage":18.96,"hours":43.4},{"period":"2008-H2","province":"NL","emp_rate":74.1,"wage":20.0,"hours":46.2},{"period":"2008-H2","province":"NS","emp_rate":81.7,"wage":19.0,"hours":43.3},{"period":"2008-H2","province":"OT","emp_rate":86.0,"wage":24.04,"hours":42.2},{"period":"2008-H2","province":"PE","emp_rate":80.0,"wage":17.5,"hours":45.4},{"period":"2008-H2","province":"QC","emp_rate":83.4,"wage":21.2,"hours":40.9},{"period":"2008-H2","province":"SK","emp_rate":91.0,"wage":23.5,"hours":45.2},{"period":"2009-H1","province":"AB","emp_rate":90.5,"wage":28.85,"hours":43.6},{"period":"2009-H1","province":"BC","emp_rate":85.1,"wage":26.0,"hours":42.0},{"period":"2009-H1","province":"MB","emp_rate":88.8,"wage":21.55,"hours":42.0},{"period":"2009-H1","province":"NB","emp_rate":82.1,"wage":19.28,"hours":42.6},{"period":"2009-H1","province":"NL","emp_rate":70.8,"wage":22.0,"hours":44.3},{"period":"2009-H1","province":"NS","emp_rate":82.6,"wage":20.0,"hours":43.0},{"period":"2009-H1","province":"OT","emp_rate":83.4,"wage":25.0,"hours":42.0},{"period":"2009-H1","province":"PE","emp_rate":80.4,"wage":18.81,"hours":44.2},{"period":"2009-H1","province":"QC","emp_rate":82.9,"wage":22.0,"hours":40.4},{"period":"2009-H1","province":"SK","emp_rate":90.8,"wage":25.0,"hours":44.1},{"period":"2009-H2","province":"AB","emp_rate":88.5,"wage":27.8,"hours":43.6},{"period":"2009-H2","province":"BC","emp_rate":83.9,"wage":25.48,"hours":42.0},{"period":"2009-H2","province":"MB","emp_rate":89.4,"wage":21.0,"hours":42.7},{"period":"2009-H2","province":"NB","emp_rate":83.0,"wage":20.0,"hours":43.4},{"period":"2009-H2","province":"NL","emp_rate":71.8,"wage":20.0,"hours":45.3},{"period":"2009-H2","province":"NS","emp_rate":79.7,"wage":20.68,"hours":43.2},{"period":"2009-H2","province":"OT","emp_rate":82.8,"wage":24.04,"hours":42.0},{"period":"2009-H2","province":"PE","emp_rate":81.5,"wage":17.5,"hours":44.7},{"period":"2009-H2","province":"QC","emp_rate":81.4,"wage":22.63,"hours":40.5},{"period":"2009-H2","province":"SK","emp_rate":88.7,"wage":23.91,"hours":44.2},{"period":"2010-H1","province":"AB","emp_rate":87.4,"wage":28.5,"hours":43.0},{"period":"2010-H1","province":"BC","emp_rate":83.9,"wage":26.0,"hours":41.8},{"period":"2010-H1","province":"MB","emp_rate":87.6,"wage":22.0,"hours":42.2},{"period":"2010-H1","province":"NB","emp_rate":81.0,"wage":20.54,"hours":42.7},{"period":"2010-H1","province":"NL","emp_rate":71.1,"wage":23.0,"hours":44.8},{"period":"2010-H1","province":"NS","emp_rate":79.3,"wage":21.96,"hours":42.9},{"period":"2010-H1","province":"OT","emp_rate":82.5,"wage":25.0,"hours":42.0},{"period":"2010-H1","province":"PE","emp_rate":81.9,"wage":18.27,"hours":43.5},{"period":"2010-H1","province":"QC","emp_rate":82.1,"wage":23.27,"hours":40.4},{"period":"2010-H1","province":"SK","emp_rate":89.4,"wage":25.77,"hours":43.6},{"period":"2010-H2","province":"AB","emp_rate":87.4,"wage":28.02,"hours":43.4},{"period":"2010-H2","province":"BC","emp_rate":84.7,"wage":26.0,"hours":42.2},{"period":"2010-H2","province":"MB","emp_rate":89.8,"wage":21.63,"hours":42.3},{"period":"2010-H2","province":"NB","emp_rate":81.2,"wage":19.75,"hours":42.7},{"period":"2010-H2","province":"NL","emp_rate":72.2,"wage":20.19,"hours":46.2},{"period":"2010-H2","province":"NS","emp_rate":81.7,"wage":20.6,"hours":43.6},{"period":"2010-H2","province":"OT","emp_rate":83.8,"wage":25.0,"hours":41.8},{"period":"2010-H2","province":"PE","emp_rate":81.0,"wage":17.54,"hours":45.1},{"period":"2010-H2","province":"QC","emp_rate":82.4,"wage":23.0,"hours":41.0},{"period":"2010-H2","province":"SK","emp_rate":89.0,"wage":25.0,"hours":43.9},{"period":"2011-H1","province":"AB","emp_rate":89.0,"wage":29.0,"hours":43.7},{"period":"2011-H1","province":"BC","emp_rate":82.4,"wage":25.96,"hours":41.8},{"period":"2011-H1","province":"MB","emp_rate":89.6,"wage":22.5,"hours":42.4},{"period":"2011-H1","province":"NB","emp_rate":80.7,"wage":20.09,"hours":42.6},{"period":"2011-H1","province":"NL","emp_rate":75.6,"wage":24.04,"hours":45.2},{"period":"2011-H1","province":"NS","emp_rate":81.5,"wage":20.39,"hours":42.8},{"period":"2011-H1","province":"OT","emp_rate":84.6,"wage":25.0,"hours":41.6},{"period":"2011-H1","province":"PE","emp_rate":80.0,"wage":19.24,"hours":43.5},{"period":"2011-H1","province":"QC","emp_rate":83.5,"wage":23.0,"hours":40.4},{"period":"2011-H1","province":"SK","emp_rate":89.1,"wage":25.48,"hours":43.7},{"period":"2011-H2","province":"AB","emp_rate":90.3,"wage":28.0,"hours":43.2},{"period":"2011-H2","province":"BC","emp_rate":83.6,"wage":26.2,"hours":41.7},{"period":"2011-H2","province":"MB","emp_rate":88.6,"wage":22.0,"hours":42.7},{"period":"2011-H2","province":"NB","emp_rate":80.7,"wage":19.97,"hours":43.0},{"period":"2011-H2","province":"NL","emp_rate":75.7,"wage":22.5,"hours":45.8},{"period":"2011-H2","province":"NS","emp_rate":81.7,"wage":20.0,"hours":43.2},{"period":"2011-H2","province":"OT","emp_rate":84.5,"wage":25.0,"hours":41.7},{"period":"2011-H2","province":"PE","emp_rate":79.3,"wage":18.75,"hours":45.1},{"period":"2011-H2","province":"QC","emp_rate":84.0,"wage":22.6,"hours":40.8},{"period":"2011-H2","province":"SK","emp_rate":90.4,"wage":25.0,"hours":44.2},{"period":"2012-H1","province":"AB","emp_rate":89.7,"wage":29.81,"hours":43.8},{"period":"2012-H1","province":"BC","emp_rate":84.5,"wage":27.0,"hours":41.6},{"period":"2012-H1","province":"MB","emp_rate":90.2,"wage":23.0,"hours":41.6},{"period":"2012-H1","province":"NB","emp_rate":80.3,"wage":21.0,"hours":42.6},{"period":"2012-H1","province":"NL","emp_rate":76.8,"wage":26.17,"hours":43.3},{"period":"2012-H1","province":"NS","emp_rate":82.6,"wage":22.3,"hours":42.8},{"period":"2012-H1","province":"OT","emp_rate":85.0,"wage":25.0,"hours":41.8},{"period":"2012-H1","province":"PE","emp_rate":84.2,"wage":20.19,"hours":44.2},{"period":"2012-H1","province":"QC","emp_rate":82.3,"wage":24.04,"hours":40.3},{"period":"2012-H1","province":"SK","emp_rate":88.7,"wage":26.5,"hours":43.5},{"period":"2012-H2","province":"AB","emp_rate":90.0,"wage":29.81,"hours":44.2},{"period":"2012-H2","province":"BC","emp_rate":85.1,"wage":26.44,"hours":42.3},{"period":"2012-H2","province":"MB","emp_rate":88.1,"wage":23.0,"hours":43.0},{"period":"2012-H2","province":"NB","emp_rate":80.2,"wage":20.0,"hours":43.3},{"period":"2012-H2","province":"NL","emp_rate":78.4,"wage":25.0,"hours":45.3},{"period":"2012-H2","province":"NS","emp_rate":81.8,"wage":21.15,"hours":43.3},{"period":"2012-H2","province":"OT","emp_rate":84.1,"wage":26.0,"hours":42.0},{"period":"2012-H2","province":"PE","emp_rate":84.9,"wage":20.0,"hours":43.8},{"period":"2012-H2","province":"QC","emp_rate":84.3,"wage":23.0,"hours":40.9},{"period":"2012-H2","province":"SK","emp_rate":89.8,"wage":26.44,"hours":44.8},{"period":"2013-H1","province":"AB","emp_rate":90.1,"wage":30.0,"hours":43.5},{"period":"2013-H1","province":"BC","emp_rate":85.8,"wage":28.0,"hours":42.2},{"period":"2013-H1","province":"MB","emp_rate":88.8,"wage":22.56,"hours":42.0},{"period":"2013-H1","province":"NB","emp_rate":79.0,"wage":21.98,"hours":42.8},{"period":"2013-H1","province":"NL","emp_rate":77.8,"wage":27.0,"hours":44.0},{"period":"2013-H1","province":"NS","emp_rate":81.6,"wage":22.0,"hours":42.4},{"period":"2013-H1","province":"OT","emp_rate":84.4,"wage":26.44,"hours":41.8},{"period":"2013-H1","province":"PE","emp_rate":81.8,"wage":21.15,"hours":44.8},{"period":"2013-H1","province":"QC","emp_rate":83.5,"wage":24.99,"hours":40.4},{"period":"2013-H1","province":"SK","emp_rate":91.1,"wage":28.0,"hours":43.5},{"period":"2013-H2","province":"AB","emp_rate":89.4,"wage":30.0,"hours":43.4},{"period":"2013-H2","province":"BC","emp_rate":84.4,"wage":27.5,"hours":42.5},{"period":"2013-H2","province":"MB","emp_rate":88.7,"wage":23.0,"hours":42.6},{"period":"2013-H2","province":"NB","emp_rate":81.3,"wage":21.0,"hours":43.5},{"period":"2013-H2","province":"NL","emp_rate":79.6,"wage":25.27,"hours":44.5},{"period":"2013-H2","province":"NS","emp_rate":80.5,"wage":22.5,"hours":43.1},{"period":"2013-H2","province":"OT","emp_rate":85.4,"wage":26.0,"hours":41.9},{"period":"2013-H2","province":"PE","emp_rate":81.6,"wage":19.71,"hours":45.7},{"period":"2013-H2","province":"QC","emp_rate":83.6,"wage":24.0,"hours":40.7},{"period":"2013-H2","province":"SK","emp_rate":90.2,"wage":27.0,"hours":44.3},{"period":"2014-H1","province":"AB","emp_rate":91.0,"wage":31.5,"hours":43.6},{"period":"2014-H1","province":"BC","emp_rate":85.3,"wage":28.0,"hours":41.7},{"period":"2014-H1","province":"MB","emp_rate":88.2,"wage":23.59,"hours":42.1},{"period":"2014-H1","province":"NB","emp_rate":82.2,"wage":21.0,"hours":42.4},{"period":"2014-H1","province":"NL","emp_rate":80.3,"wage":30.22,"hours":44.0},{"period":"2014-H1","province":"NS","emp_rate":79.7,"wage":23.0,"hours":42.0},{"period":"2014-H1","province":"OT","emp_rate":84.5,"wage":25.64,"hours":41.6},{"period":"2014-H1","province":"PE","emp_rate":82.6,"wage":20.56,"hours":44.5},{"period":"2014-H1","province":"QC","emp_rate":83.0,"wage":25.0,"hours":40.5},{"period":"2014-H1","province":"SK","emp_rate":90.3,"wage":27.5,"hours":43.3},{"period":"2014-H2","province":"AB","emp_rate":90.8,"wage":31.73,"hours":43.9},{"period":"2014-H2","province":"BC","emp_rate":84.5,"wage":27.1,"hours":42.3},{"period":"2014-H2","province":"MB","emp_rate":88.1,"wage":24.0,"hours":42.0},{"period":"2014-H2","province":"NB","emp_rate":79.9,"wage":20.0,"hours":43.6},{"period":"2014-H2","province":"NL","emp_rate":75.2,"wage":27.5,"hours":45.2},{"period":"2014-H2","province":"NS","emp_rate":81.7,"wage":23.5,"hours":43.3},{"period":"2014-H2","province":"OT","emp_rate":84.3,"wage":26.0,"hours":41.7},{"period":"2014-H2","province":"PE","emp_rate":85.1,"wage":20.19,"hours":45.0},{"period":"2014-H2","province":"QC","emp_rate":82.7,"wage":24.5,"hours":40.4},{"period":"2014-H2","province":"SK","emp_rate":90.3,"wage":29.0,"hours":44.1},{"period":"2015-H1","province":"AB","emp_rate":90.6,"wage":32.0,"hours":43.1},{"period":"2015-H1","province":"BC","emp_rate":85.8,"wage":28.0,"hours":41.8},{"period":"2015-H1","province":"MB","emp_rate":89.6,"wage":24.76,"hours":42.0},{"period":"2015-H1","province":"NB","emp_rate":80.2,"wage":23.08,"hours":42.9},{"period":"2015-H1","province":"NL","emp_rate":77.4,"wage":29.5,"hours":43.6},{"period":"2015-H1","province":"NS","emp_rate":82.2,"wage":24.04,"hours":42.8},{"period":"2015-H1","province":"OT","emp_rate":84.7,"wage":23.44,"hours":41.3},{"period":"2015-H1","province":"PE","emp_rate":81.7,"wage":22.31,"hours":42.8},{"period":"2015-H1","province":"QC","emp_rate":84.3,"wage":24.04,"hours":40.3},{"period":"2015-H1","province":"SK","emp_rate":89.2,"wage":29.97,"hours":42.9},{"period":"2015-H2","province":"AB","emp_rate":88.3,"wage":33.0,"hours":43.3},{"period":"2015-H2","province":"BC","emp_rate":86.3,"wage":28.37,"hours":42.2},{"period":"2015-H2","province":"MB","emp_rate":88.1,"wage":24.0,"hours":42.1},{"period":"2015-H2","province":"NB","emp_rate":78.2,"wage":22.4,"hours":42.5},{"period":"2015-H2","province":"NL","emp_rate":76.3,"wage":28.0,"hours":44.8},{"period":"2015-H2","province":"NS","emp_rate":82.9,"wage":23.5,"hours":42.8},{"period":"2015-H2","province":"OT","emp_rate":85.4,"wage":28.0,"hours":41.8},{"period":"2015-H2","province":"PE","emp_rate":83.1,"wage":22.0,"hours":44.7},{"period":"2015-H2","province":"QC","emp_rate":83.9,"wage":25.0,"hours":40.4},{"period":"2015-H2","province":"SK","emp_rate":87.8,"wage":29.67,"hours":43.9},{"period":"2016-H1","province":"AB","emp_rate":86.7,"wage":33.65,"hours":43.6},{"period":"2016-H1","province":"BC","emp_rate":85.3,"wage":29.85,"hours":41.8},{"period":"2016-H1","province":"MB","emp_rate":86.9,"wage":25.0,"hours":42.0},{"period":"2016-H1","province":"NB","emp_rate":81.8,"wage":23.0,"hours":42.4},{"period":"2016-H1","province":"NL","emp_rate":75.5,"wage":28.85,"hours":43.7},{"period":"2016-H1","province":"NS","emp_rate":79.3,"wage":24.0,"hours":42.6},{"period":"2016-H1","province":"OT","emp_rate":85.6,"wage":28.0,"hours":41.5},{"period":"2016-H1","province":"PE","emp_rate":83.5,"wage":22.0,"hours":43.8},{"period":"2016-H1","province":"QC","emp_rate":84.0,"wage":26.0,"hours":40.1},{"period":"2016-H1","province":"SK","emp_rate":88.5,"wage":30.0,"hours":43.1},{"period":"2016-H2","province":"AB","emp_rate":86.1,"wage":33.65,"hours":42.8},{"period":"2016-H2","province":"BC","emp_rate":85.1,"wage":29.91,"hours":41.3},{"period":"2016-H2","province":"MB","emp_rate":87.1,"wage":24.14,"hours":42.1},{"period":"2016-H2","province":"NB","emp_rate":82.2,"wage":22.5,"hours":43.3},{"period":"2016-H2","province":"NL","emp_rate":76.8,"wage":26.86,"hours":45.6},{"period":"2016-H2","province":"NS","emp_rate":80.3,"wage":24.52,"hours":42.8},{"period":"2016-H2","province":"OT","emp_rate":85.2,"wage":28.0,"hours":41.7},{"period":"2016-H2","province":"PE","emp_rate":80.3,"wage":21.35,"hours":44.8},{"period":"2016-H2","province":"QC","emp_rate":84.8,"wage":25.78,"hours":40.3},{"period":"2016-H2","province":"SK","emp_rate":87.6,"wage":30.0,"hours":43.6},{"period":"2017-H1","province":"AB","emp_rate":86.0,"wage":33.74,"hours":43.3},{"period":"2017-H1","province":"BC","emp_rate":86.3,"wage":28.57,"hours":41.5},{"period":"2017-H1","province":"MB","emp_rate":86.0,"wage":25.0,"hours":41.4},{"period":"2017-H1","province":"NB","emp_rate":80.3,"wage":23.5,"hours":43.0},{"period":"2017-H1","province":"NL","emp_rate":72.4,"wage":28.82,"hours":43.8},{"period":"2017-H1","province":"NS","emp_rate":80.5,"wage":25.0,"hours":42.9},{"period":"2017-H1","province":"OT","emp_rate":86.3,"wage":28.28,"hours":41.5},{"period":"2017-H1","province":"PE","emp_rate":82.2,"wage":21.96,"hours":42.9},{"period":"2017-H1","province":"QC","emp_rate":84.9,"wage":26.67,"hours":40.0},{"period":"2017-H1","province":"SK","emp_rate":86.8,"wage":30.0,"hours":42.8},{"period":"2017-H2","province":"AB","emp_rate":87.3,"wage":33.65,"hours":43.2},{"period":"2017-H2","province":"BC","emp_rate":87.7,"wage":29.33,"hours":41.8},{"period":"2017-H2","province":"MB","emp_rate":88.3,"wage":26.0,"hours":42.5},{"period":"2017-H2","province":"NB","emp_rate":82.2,"wage":22.44,"hours":45.0},{"period":"2017-H2","province":"NL","emp_rate":70.2,"wage":26.37,"hours":45.0},{"period":"2017-H2","province":"NS","emp_rate":79.9,"wage":24.25,"hours":43.2},{"period":"2017-H2","province":"OT","emp_rate":86.4,"wage":27.9,"hours":41.4},{"period":"2017-H2","province":"PE","emp_rate":82.5,"wage":20.75,"hours":44.3},{"period":"2017-H2","province":"QC","emp_rate":86.4,"wage":26.05,"hours":40.5},{"period":"2017-H2","province":"SK","emp_rate":87.2,"wage":29.0,"hours":43.3},{"period":"2018-H1","province":"AB","emp_rate":89.1,"wage":33.27,"hours":43.0},{"period":"2018-H1","province":"BC","emp_rate":88.2,"wage":30.0,"hours":41.8},{"period":"2018-H1","province":"MB","emp_rate":87.4,"wage":26.44,"hours":41.5},{"period":"2018-H1","province":"NB","emp_rate":81.7,"wage":23.08,"hours":42.0},{"period":"2018-H1","province":"NL","emp_rate":71.1,"wage":28.85,"hours":44.3},{"period":"2018-H1","province":"NS","emp_rate":82.1,"wage":25.0,"hours":42.3},{"period":"2018-H1","province":"OT","emp_rate":85.9,"wage":28.85,"hours":41.5},{"period":"2018-H1","province":"PE","emp_rate":84.0,"wage":22.0,"hours":43.9},{"period":"2018-H1","province":"QC","emp_rate":86.9,"wage":23.92,"hours":40.4},{"period":"2018-H1","province":"SK","emp_rate":86.9,"wage":30.29,"hours":42.7},{"period":"2018-H2","province":"AB","emp_rate":88.1,"wage":33.3,"hours":43.3},{"period":"2018-H2","province":"BC","emp_rate":87.9,"wage":31.0,"hours":41.5},{"period":"2018-H2","province":"MB","emp_rate":87.4,"wage":25.0,"hours":42.2},{"period":"2018-H2","province":"NB","emp_rate":82.5,"wage":23.0,"hours":42.8},{"period":"2018-H2","province":"NL","emp_rate":74.0,"wage":27.5,"hours":44.8},{"period":"2018-H2","province":"NS","emp_rate":80.5,"wage":25.0,"hours":42.1},{"period":"2018-H2","province":"OT","emp_rate":86.3,"wage":28.85,"hours":41.4},{"period":"2018-H2","province":"PE","emp_rate":83.1,"wage":22.15,"hours":43.2},{"period":"2018-H2","province":"QC","emp_rate":85.3,"wage":25.71,"hours":40.1},{"period":"2018-H2","province":"SK","emp_rate":86.5,"wage":30.51,"hours":42.8},{"period":"2019-H1","province":"AB","emp_rate":88.2,"wage":34.0,"hours":42.6},{"period":"2019-H1","province":"BC","emp_rate":88.3,"wage":30.0,"hours":41.4},{"period":"2019-H1","province":"MB","emp_rate":89.0,"wage":26.0,"hours":41.9},{"period":"2019-H1","province":"NB","emp_rate":80.1,"wage":24.62,"hours":42.3},{"period":"2019-H1","province":"NL","emp_rate":77.5,"wage":28.0,"hours":43.9},{"period":"2019-H1","province":"NS","emp_rate":81.6,"wage":25.18,"hours":42.2},{"period":"2019-H1","province":"OT","emp_rate":86.0,"wage":29.81,"hours":41.3},{"period":"2019-H1","province":"PE","emp_rate":81.9,"wage":23.18,"hours":42.7},{"period":"2019-H1","province":"QC","emp_rate":87.2,"wage":27.69,"hours":39.9},{"period":"2019-H1","province":"SK","emp_rate":88.0,"wage":31.0,"hours":42.7},{"period":"2019-H2","province":"AB","emp_rate":88.4,"wage":35.0,"hours":42.9},{"period":"2019-H2","province":"BC","emp_rate":88.6,"wage":30.58,"hours":41.4},{"period":"2019-H2","province":"MB","emp_rate":87.7,"wage":26.5,"hours":42.5},{"period":"2019-H2","province":"NB","emp_rate":80.8,"wage":24.0,"hours":42.9},{"period":"2019-H2","province":"NL","emp_rate":77.7,"wage":28.85,"hours":44.4},{"period":"2019-H2","province":"NS","emp_rate":82.4,"wage":24.67,"hours":42.3},{"period":"2019-H2","province":"OT","emp_rate":86.3,"wage":30.0,"hours":41.4},{"period":"2019-H2","province":"PE","emp_rate":82.4,"wage":21.88,"hours":43.3},{"period":"2019-H2","province":"QC","emp_rate":87.5,"wage":28.0,"hours":40.3},{"period":"2019-H2","province":"SK","emp_rate":88.9,"wage":30.0,"hours":43.0},{"period":"2020-H1","province":"AB","emp_rate":87.4,"wage":34.62,"hours":42.8},{"period":"2020-H1","province":"BC","emp_rate":87.9,"wage":31.0,"hours":41.2},{"period":"2020-H1","province":"MB","emp_rate":87.6,"wage":27.5,"hours":41.3},{"period":"2020-H1","province":"NB","emp_rate":82.9,"wage":24.51,"hours":42.1},{"period":"2020-H1","province":"NL","emp_rate":76.6,"wage":30.0,"hours":44.4},{"period":"2020-H1","province":"NS","emp_rate":81.1,"wage":25.0,"hours":41.9},{"period":"2020-H1","province":"OT","emp_rate":86.7,"wage":31.25,"hours":41.2},{"period":"2020-H1","province":"PE","emp_rate":83.2,"wage":23.28,"hours":42.9},{"period":"2020-H1","province":"QC","emp_rate":86.7,"wage":28.85,"hours":40.3},{"period":"2020-H1","province":"SK","emp_rate":86.9,"wage":31.59,"hours":42.9},{"period":"2020-H2","province":"AB","emp_rate":82.7,"wage":35.0,"hours":43.0},{"period":"2020-H2","province":"BC","emp_rate":82.1,"wage":31.25,"hours":41.0},{"period":"2020-H2","province":"MB","emp_rate":84.2,"wage":27.41,"hours":42.1},{"period":"2020-H2","province":"NB","emp_rate":80.2,"wage":25.64,"hours":43.4},{"period":"2020-H2","province":"NL","emp_rate":72.5,"wage":28.85,"hours":44.4},{"period":"2020-H2","province":"NS","emp_rate":79.6,"wage":25.8,"hours":42.5},{"period":"2020-H2","province":"OT","emp_rate":81.7,"wage":31.57,"hours":40.9},{"period":"2020-H2","province":"PE","emp_rate":79.8,"wage":23.08,"hours":42.8},{"period":"2020-H2","province":"QC","emp_rate":85.4,"wage":30.0,"hours":40.0},{"period":"2020-H2","province":"SK","emp_rate":86.5,"wage":32.0,"hours":43.2},{"period":"2021-H1","province":"AB","emp_rate":84.6,"wage":36.0,"hours":42.5},{"period":"2021-H1","province":"BC","emp_rate":87.3,"wage":33.65,"hours":41.1},{"period":"2021-H1","province":"MB","emp_rate":86.5,"wage":28.85,"hours":41.4},{"period":"2021-H1","province":"NB","emp_rate":80.7,"wage":25.0,"hours":41.7},{"period":"2021-H1","province":"NL","emp_rate":79.2,"wage":32.21,"hours":43.2},{"period":"2021-H1","province":"NS","emp_rate":82.5,"wage":25.46,"hours":41.8},{"period":"2021-H1","province":"OT","emp_rate":83.0,"wage":32.21,"hours":41.1},{"period":"2021-H1","province":"PE","emp_rate":83.4,"wage":24.04,"hours":43.7},{"period":"2021-H1","province":"QC","emp_rate":85.3,"wage":30.0,"hours":40.0},{"period":"2021-H1","province":"SK","emp_rate":87.6,"wage":32.0,"hours":42.5},{"period":"2021-H2","province":"AB","emp_rate":86.4,"wage":35.9,"hours":43.2},{"period":"2021-H2","province":"BC","emp_rate":88.1,"wage":34.0,"hours":41.3},{"period":"2021-H2","province":"MB","emp_rate":87.3,"wage":29.0,"hours":41.4},{"period":"2021-H2","province":"NB","emp_rate":81.2,"wage":26.07,"hours":42.4},{"period":"2021-H2","province":"NL","emp_rate":74.6,"wage":29.37,"hours":43.2},{"period":"2021-H2","province":"NS","emp_rate":83.3,"wage":26.92,"hours":41.8},{"period":"2021-H2","province":"OT","emp_rate":85.0,"wage":33.05,"hours":41.0},{"period":"2021-H2","province":"PE","emp_rate":83.3,"wage":25.0,"hours":43.2},{"period":"2021-H2","province":"QC","emp_rate":85.6,"wage":39.0,"hours":40.1},{"period":"2021-H2","province":"SK","emp_rate":88.3,"wage":31.0,"hours":42.7},{"period":"2022-H1","province":"AB","emp_rate":88.3,"wage":35.0,"hours":42.4},{"period":"2022-H1","province":"BC","emp_rate":87.6,"wage":35.0,"hours":40.9},{"period":"2022-H1","province":"MB","emp_rate":89.3,"wage":29.0,"hours":41.1},{"period":"2022-H1","province":"NB","emp_rate":83.6,"wage":26.5,"hours":42.1},{"period":"2022-H1","province":"NL","emp_rate":75.0,"wage":30.77,"hours":43.7},{"period":"2022-H1","province":"NS","emp_rate":83.8,"wage":27.31,"hours":41.8},{"period":"2022-H1","province":"OT","emp_rate":87.6,"wage":34.0,"hours":40.8},{"period":"2022-H1","province":"PE","emp_rate":84.4,"wage":26.0,"hours":42.1},{"period":"2022-H1","province":"QC","emp_rate":88.3,"wage":30.97,"hours":40.1},{"period":"2022-H1","province":"SK","emp_rate":88.7,"wage":33.7,"hours":42.3},{"period":"2022-H2","province":"AB","emp_rate":89.4,"wage":36.0,"hours":42.5},{"period":"2022-H2","province":"BC","emp_rate":88.5,"wage":35.0,"hours":41.4},{"period":"2022-H2","province":"MB","emp_rate":88.7,"wage":29.57,"hours":41.6},{"period":"2022-H2","province":"NB","emp_rate":82.3,"wage":27.8,"hours":41.4},{"period":"2022-H2","province":"NL","emp_rate":81.1,"wage":32.46,"hours":44.1},{"period":"2022-H2","province":"NS","emp_rate":81.7,"wage":28.19,"hours":41.4},{"period":"2022-H2","province":"OT","emp_rate":88.0,"wage":34.0,"hours":41.1},{"period":"2022-H2","province":"PE","emp_rate":85.7,"wage":25.0,"hours":43.0},{"period":"2022-H2","province":"QC","emp_rate":89.4,"wage":32.5,"hours":40.3},{"period":"2022-H2","province":"SK","emp_rate":89.3,"wage":33.5,"hours":43.0},{"period":"2023-H1","province":"AB","emp_rate":89.1,"wage":37.22,"hours":42.4},{"period":"2023-H1","province":"BC","emp_rate":88.0,"wage":36.06,"hours":41.0},{"period":"2023-H1","province":"MB","emp_rate":88.1,"wage":30.7,"hours":41.2},{"period":"2023-H1","province":"NB","emp_rate":83.0,"wage":28.0,"hours":41.9},{"period":"2023-H1","province":"NL","emp_rate":80.0,"wage":32.39,"hours":45.0},{"period":"2023-H1","province":"NS","emp_rate":85.1,"wage":28.0,"hours":41.4},{"period":"2023-H1","province":"OT","emp_rate":88.3,"wage":35.0,"hours":41.0},{"period":"2023-H1","province":"PE","emp_rate":85.4,"wage":28.0,"hours":41.2},{"period":"2023-H1","province":"QC","emp_rate":89.0,"wage":33.0,"hours":40.1},{"period":"2023-H1","province":"SK","emp_rate":89.3,"wage":33.65,"hours":42.1},{"period":"2023-H2","province":"AB","emp_rate":88.9,"wage":37.0,"hours":42.5},{"period":"2023-H2","province":"BC","emp_rate":87.3,"wage":37.0,"hours":41.0},{"period":"2023-H2","province":"MB","emp_rate":88.6,"wage":30.9,"hours":41.7},{"period":"2023-H2","province":"NB","emp_rate":86.8,"wage":28.0,"hours":42.2},{"period":"2023-H2","province":"NL","emp_rate":79.8,"wage":32.5,"hours":44.9},{"period":"2023-H2","province":"NS","emp_rate":85.1,"wage":29.51,"hours":42.2},{"period":"2023-H2","province":"OT","emp_rate":87.5,"wage":35.9,"hours":41.0},{"period":"2023-H2","province":"PE","emp_rate":85.6,"wage":27.0,"hours":43.3},{"period":"2023-H2","province":"QC","emp_rate":87.9,"wage":33.0,"hours":40.0},{"period":"2023-H2","province":"SK","emp_rate":88.2,"wage":33.28,"hours":42.3},{"period":"2024-H1","province":"AB","emp_rate":89.1,"wage":39.0,"hours":42.8},{"period":"2024-H1","province":"BC","emp_rate":87.8,"wage":38.46,"hours":41.3},{"period":"2024-H1","province":"MB","emp_rate":90.1,"wage":30.0,"hours":41.3},{"period":"2024-H1","province":"NB","emp_rate":84.0,"wage":28.85,"hours":41.3},{"period":"2024-H1","province":"NL","emp_rate":81.8,"wage":35.0,"hours":43.6},{"period":"2024-H1","province":"NS","emp_rate":84.2,"wage":30.93,"hours":41.2},{"period":"2024-H1","province":"OT","emp_rate":86.6,"wage":37.38,"hours":40.9},{"period":"2024-H1","province":"PE","emp_rate":85.1,"wage":28.21,"hours":41.6},{"period":"2024-H1","province":"QC","emp_rate":87.3,"wage":34.62,"hours":39.5},{"period":"2024-H1","province":"SK","emp_rate":90.0,"wage":34.5,"hours":41.9},{"period":"2024-H2","province":"AB","emp_rate":87.6,"wage":38.46,"hours":42.5},{"period":"2024-H2","province":"BC","emp_rate":86.9,"wage":38.46,"hours":41.1},{"period":"2024-H2","province":"MB","emp_rate":88.7,"wage":31.0,"hours":41.4},{"period":"2024-H2","province":"NB","emp_rate":81.0,"wage":30.0,"hours":42.1},{"period":"2024-H2","province":"NL","emp_rate":80.4,"wage":33.5,"hours":45.2},{"period":"2024-H2","province":"NS","emp_rate":84.0,"wage":30.22,"hours":41.5},{"period":"2024-H2","province":"OT","emp_rate":86.7,"wage":37.1,"hours":40.8},{"period":"2024-H2","province":"PE","emp_rate":83.2,"wage":28.0,"hours":42.7},{"period":"2024-H2","province":"QC","emp_rate":87.0,"wage":35.0,"hours":39.7},{"period":"2024-H2","province":"SK","emp_rate":89.0,"wage":34.62,"hours":42.6},{"period":"2025-H1","province":"AB","emp_rate":87.8,"wage":38.46,"hours":42.8},{"period":"2025-H1","province":"BC","emp_rate":87.2,"wage":40.0,"hours":40.6},{"period":"2025-H1","province":"MB","emp_rate":88.9,"wage":32.0,"hours":40.8},{"period":"2025-H1","province":"NB","emp_rate":83.7,"wage":32.0,"hours":41.3},{"period":"2025-H1","province":"NL","emp_rate":81.6,"wage":34.87,"hours":43.9},{"period":"2025-H1","province":"NS","emp_rate":84.3,"wage":32.0,"hours":40.3},{"period":"2025-H1","province":"OT","emp_rate":85.9,"wage":38.46,"hours":40.5},{"period":"2025-H1","province":"PE","emp_rate":85.5,"wage":30.0,"hours":42.1},{"period":"2025-H1","province":"QC","emp_rate":87.8,"wage":35.63,"hours":39.9},{"period":"2025-H1","province":"SK","emp_rate":88.7,"wage":36.0,"hours":42.0},{"period":"2025-H2","province":"AB","emp_rate":88.7,"wage":40.6,"hours":42.7},{"period":"2025-H2","province":"BC","emp_rate":87.5,"wage":38.75,"hours":40.9},{"period":"2025-H2","province":"MB","emp_rate":88.3,"wage":31.56,"hours":41.2},{"period":"2025-H2","province":"NB","emp_rate":86.0,"wage":31.0,"hours":41.9},{"period":"2025-H2","province":"NL","emp_rate":79.7,"wage":34.77,"hours":43.8},{"period":"2025-H2","province":"NS","emp_rate":83.8,"wage":31.25,"hours":41.4},{"period":"2025-H2","province":"OT","emp_rate":85.0,"wage":38.0,"hours":40.8},{"period":"2025-H2","province":"PE","emp_rate":84.9,"wage":27.96,"hours":41.5},{"period":"2025-H2","province":"QC","emp_rate":87.2,"wage":36.0,"hours":39.7},{"period":"2025-H2","province":"SK","emp_rate":88.4,"wage":35.77,"hours":43.0},{"period":"2026-H1","province":"AB","emp_rate":89.1,"wage":40.0,"hours":42.3},{"period":"2026-H1","province":"BC","emp_rate":86.7,"wage":40.0,"hours":40.6},{"period":"2026-H1","province":"MB","emp_rate":88.3,"wage":32.69,"hours":40.6},{"period":"2026-H1","province":"NB","emp_rate":86.3,"wage":32.0,"hours":41.2},{"period":"2026-H1","province":"NL","emp_rate":80.2,"wage":35.0,"hours":42.7},{"period":"2026-H1","province":"NS","emp_rate":83.6,"wage":33.33,"hours":40.9},{"period":"2026-H1","province":"OT","emp_rate":84.9,"wage":39.0,"hours":40.6},{"period":"2026-H1","province":"PE","emp_rate":84.5,"wage":28.85,"hours":41.3},{"period":"2026-H1","province":"QC","emp_rate":87.8,"wage":38.0,"hours":39.5},{"period":"2026-H1","province":"SK","emp_rate":88.2,"wage":36.0,"hours":42.3}];
+const WOMEN_DATA=[{"period":"2006-H2","province":"AB","emp_rate":79.2,"wage":18.41,"hours":39.8},{"period":"2006-H2","province":"BC","emp_rate":76.5,"wage":18.0,"hours":39.7},{"period":"2006-H2","province":"MB","emp_rate":79.2,"wage":16.83,"hours":39.2},{"period":"2006-H2","province":"NB","emp_rate":75.2,"wage":14.35,"hours":39.5},{"period":"2006-H2","province":"NL","emp_rate":66.4,"wage":12.95,"hours":39.9},{"period":"2006-H2","province":"NS","emp_rate":74.5,"wage":15.0,"hours":38.9},{"period":"2006-H2","province":"OT","emp_rate":77.3,"wage":19.37,"hours":39.0},{"period":"2006-H2","province":"PE","emp_rate":78.2,"wage":15.0,"hours":39.4},{"period":"2006-H2","province":"QC","emp_rate":76.2,"wage":18.0,"hours":37.8},{"period":"2006-H2","province":"SK","emp_rate":81.7,"wage":17.5,"hours":40.0},{"period":"2007-H1","province":"AB","emp_rate":79.5,"wage":19.23,"hours":39.5},{"period":"2007-H1","province":"BC","emp_rate":76.7,"wage":19.88,"hours":39.1},{"period":"2007-H1","province":"MB","emp_rate":80.2,"wage":17.0,"hours":38.6},{"period":"2007-H1","province":"NB","emp_rate":77.1,"wage":15.15,"hours":38.7},{"period":"2007-H1","province":"NL","emp_rate":66.5,"wage":15.75,"hours":39.0},{"period":"2007-H1","province":"NS","emp_rate":76.1,"wage":16.0,"hours":38.5},{"period":"2007-H1","province":"OT","emp_rate":78.0,"wage":19.49,"hours":38.9},{"period":"2007-H1","province":"PE","emp_rate":78.5,"wage":16.0,"hours":39.4},{"period":"2007-H1","province":"QC","emp_rate":77.0,"wage":18.0,"hours":37.5},{"period":"2007-H1","province":"SK","emp_rate":81.9,"wage":18.0,"hours":38.8},{"period":"2007-H2","province":"AB","emp_rate":79.1,"wage":19.49,"hours":40.3},{"period":"2007-H2","province":"BC","emp_rate":76.6,"wage":19.23,"hours":39.1},{"period":"2007-H2","province":"MB","emp_rate":81.9,"wage":18.27,"hours":39.6},{"period":"2007-H2","province":"NB","emp_rate":77.7,"wage":15.87,"hours":39.2},{"period":"2007-H2","province":"NL","emp_rate":69.6,"wage":15.0,"hours":39.6},{"period":"2007-H2","province":"NS","emp_rate":75.0,"wage":16.0,"hours":39.1},{"period":"2007-H2","province":"OT","emp_rate":78.0,"wage":20.0,"hours":39.0},{"period":"2007-H2","province":"PE","emp_rate":77.1,"wage":14.43,"hours":39.6},{"period":"2007-H2","province":"QC","emp_rate":78.6,"wage":18.0,"hours":37.8},{"period":"2007-H2","province":"SK","emp_rate":81.6,"wage":18.46,"hours":39.4},{"period":"2008-H1","province":"AB","emp_rate":80.0,"wage":20.19,"hours":39.5},{"period":"2008-H1","province":"BC","emp_rate":77.2,"wage":19.98,"hours":39.0},{"period":"2008-H1","province":"MB","emp_rate":80.3,"wage":17.95,"hours":39.0},{"period":"2008-H1","province":"NB","emp_rate":77.3,"wage":16.15,"hours":38.6},{"period":"2008-H1","province":"NL","emp_rate":68.3,"wage":16.8,"hours":38.9},{"period":"2008-H1","province":"NS","emp_rate":78.4,"wage":16.92,"hours":38.6},{"period":"2008-H1","province":"OT","emp_rate":77.2,"wage":20.51,"hours":38.7},{"period":"2008-H1","province":"PE","emp_rate":78.7,"wage":17.7,"hours":38.6},{"period":"2008-H1","province":"QC","emp_rate":77.6,"wage":18.8,"hours":37.6},{"period":"2008-H1","province":"SK","emp_rate":81.2,"wage":18.5,"hours":39.1},{"period":"2008-H2","province":"AB","emp_rate":79.9,"wage":20.5,"hours":39.7},{"period":"2008-H2","province":"BC","emp_rate":77.3,"wage":20.0,"hours":39.2},{"period":"2008-H2","province":"MB","emp_rate":80.6,"wage":18.27,"hours":38.8},{"period":"2008-H2","province":"NB","emp_rate":77.5,"wage":16.0,"hours":38.8},{"period":"2008-H2","province":"NL","emp_rate":69.3,"wage":15.36,"hours":39.0},{"period":"2008-H2","province":"NS","emp_rate":76.5,"wage":16.83,"hours":38.9},{"period":"2008-H2","province":"OT","emp_rate":77.0,"wage":20.29,"hours":38.8},{"period":"2008-H2","province":"PE","emp_rate":79.5,"wage":16.66,"hours":38.9},{"period":"2008-H2","province":"QC","emp_rate":78.1,"wage":19.23,"hours":38.1},{"period":"2008-H2","province":"SK","emp_rate":81.4,"wage":19.0,"hours":39.5},{"period":"2009-H1","province":"AB","emp_rate":78.5,"wage":20.67,"hours":39.3},{"period":"2009-H1","province":"BC","emp_rate":75.6,"wage":21.0,"hours":38.6},{"period":"2009-H1","province":"MB","emp_rate":78.9,"wage":18.27,"hours":38.8},{"period":"2009-H1","province":"NB","emp_rate":76.9,"wage":17.0,"hours":39.0},{"period":"2009-H1","province":"NL","emp_rate":69.1,"wage":17.5,"hours":38.6},{"period":"2009-H1","province":"NS","emp_rate":76.4,"wage":18.0,"hours":38.9},{"period":"2009-H1","province":"OT","emp_rate":76.8,"wage":21.54,"hours":39.0},{"period":"2009-H1","province":"PE","emp_rate":78.8,"wage":17.0,"hours":38.7},{"period":"2009-H1","province":"QC","emp_rate":78.4,"wage":20.0,"hours":37.5},{"period":"2009-H1","province":"SK","emp_rate":82.7,"wage":18.89,"hours":38.8},{"period":"2009-H2","province":"AB","emp_rate":76.8,"wage":21.35,"hours":39.1},{"period":"2009-H2","province":"BC","emp_rate":74.9,"wage":21.0,"hours":38.9},{"period":"2009-H2","province":"MB","emp_rate":78.8,"wage":18.77,"hours":38.7},{"period":"2009-H2","province":"NB","emp_rate":77.4,"wage":16.83,"hours":39.2},{"period":"2009-H2","province":"NL","emp_rate":67.8,"wage":17.15,"hours":38.9},{"period":"2009-H2","province":"NS","emp_rate":76.2,"wage":18.0,"hours":38.5},{"period":"2009-H2","province":"OT","emp_rate":75.8,"wage":21.63,"hours":38.8},{"period":"2009-H2","province":"PE","emp_rate":77.1,"wage":17.0,"hours":38.9},{"period":"2009-H2","province":"QC","emp_rate":77.4,"wage":19.96,"hours":38.0},{"period":"2009-H2","province":"SK","emp_rate":82.5,"wage":20.0,"hours":39.1},{"period":"2010-H1","province":"AB","emp_rate":76.2,"wage":21.98,"hours":38.9},{"period":"2010-H1","province":"BC","emp_rate":74.8,"wage":21.0,"hours":38.7},{"period":"2010-H1","province":"MB","emp_rate":80.9,"wage":19.21,"hours":38.5},{"period":"2010-H1","province":"NB","emp_rate":80.2,"wage":18.0,"hours":38.3},{"period":"2010-H1","province":"NL","emp_rate":69.9,"wage":18.75,"hours":38.6},{"period":"2010-H1","province":"NS","emp_rate":76.9,"wage":18.58,"hours":38.8},{"period":"2010-H1","province":"OT","emp_rate":76.4,"wage":22.12,"hours":38.7},{"period":"2010-H1","province":"PE","emp_rate":79.6,"wage":18.1,"hours":38.4},{"period":"2010-H1","province":"QC","emp_rate":79.2,"wage":20.0,"hours":37.6},{"period":"2010-H1","province":"SK","emp_rate":82.0,"wage":20.19,"hours":39.3},{"period":"2010-H2","province":"AB","emp_rate":77.4,"wage":21.63,"hours":38.9},{"period":"2010-H2","province":"BC","emp_rate":75.4,"wage":21.0,"hours":38.5},{"period":"2010-H2","province":"MB","emp_rate":79.2,"wage":19.2,"hours":38.8},{"period":"2010-H2","province":"NB","emp_rate":78.4,"wage":18.0,"hours":39.1},{"period":"2010-H2","province":"NL","emp_rate":70.1,"wage":18.77,"hours":39.2},{"period":"2010-H2","province":"NS","emp_rate":76.3,"wage":18.0,"hours":38.9},{"period":"2010-H2","province":"OT","emp_rate":76.7,"wage":21.63,"hours":38.7},{"period":"2010-H2","province":"PE","emp_rate":80.0,"wage":19.0,"hours":38.7},{"period":"2010-H2","province":"QC","emp_rate":77.9,"wage":20.0,"hours":37.4},{"period":"2010-H2","province":"SK","emp_rate":81.5,"wage":20.6,"hours":39.8},{"period":"2011-H1","province":"AB","emp_rate":77.8,"wage":22.0,"hours":39.2},{"period":"2011-H1","province":"BC","emp_rate":74.9,"wage":21.63,"hours":38.7},{"period":"2011-H1","province":"MB","emp_rate":81.6,"wage":19.75,"hours":38.3},{"period":"2011-H1","province":"NB","emp_rate":75.9,"wage":18.77,"hours":38.3},{"period":"2011-H1","province":"NL","emp_rate":70.9,"wage":19.75,"hours":38.8},{"period":"2011-H1","province":"NS","emp_rate":76.9,"wage":19.23,"hours":38.4},{"period":"2011-H1","province":"OT","emp_rate":76.3,"wage":22.65,"hours":38.8},{"period":"2011-H1","province":"PE","emp_rate":76.6,"wage":20.0,"hours":39.0},{"period":"2011-H1","province":"QC","emp_rate":78.4,"wage":20.9,"hours":37.6},{"period":"2011-H1","province":"SK","emp_rate":80.7,"wage":20.0,"hours":38.6},{"period":"2011-H2","province":"AB","emp_rate":77.8,"wage":22.0,"hours":39.6},{"period":"2011-H2","province":"BC","emp_rate":74.8,"wage":21.44,"hours":39.0},{"period":"2011-H2","province":"MB","emp_rate":80.2,"wage":19.23,"hours":38.6},{"period":"2011-H2","province":"NB","emp_rate":77.2,"wage":18.75,"hours":38.7},{"period":"2011-H2","province":"NL","emp_rate":72.7,"wage":19.64,"hours":39.4},{"period":"2011-H2","province":"NS","emp_rate":79.0,"wage":18.0,"hours":39.0},{"period":"2011-H2","province":"OT","emp_rate":76.3,"wage":22.46,"hours":38.8},{"period":"2011-H2","province":"PE","emp_rate":81.5,"wage":19.23,"hours":39.1},{"period":"2011-H2","province":"QC","emp_rate":78.4,"wage":20.0,"hours":37.6},{"period":"2011-H2","province":"SK","emp_rate":79.1,"wage":20.91,"hours":39.2},{"period":"2012-H1","province":"AB","emp_rate":77.6,"wage":22.79,"hours":39.4},{"period":"2012-H1","province":"BC","emp_rate":75.9,"wage":21.9,"hours":38.6},{"period":"2012-H1","province":"MB","emp_rate":78.7,"wage":20.0,"hours":38.4},{"period":"2012-H1","province":"NB","emp_rate":77.0,"wage":19.0,"hours":38.6},{"period":"2012-H1","province":"NL","emp_rate":72.7,"wage":21.0,"hours":38.6},{"period":"2012-H1","province":"NS","emp_rate":78.6,"wage":19.25,"hours":38.5},{"period":"2012-H1","province":"OT","emp_rate":76.2,"wage":22.67,"hours":38.8},{"period":"2012-H1","province":"PE","emp_rate":78.7,"wage":20.0,"hours":38.9},{"period":"2012-H1","province":"QC","emp_rate":78.3,"wage":21.0,"hours":37.7},{"period":"2012-H1","province":"SK","emp_rate":78.1,"wage":21.0,"hours":39.1},{"period":"2012-H2","province":"AB","emp_rate":78.9,"wage":23.95,"hours":39.6},{"period":"2012-H2","province":"BC","emp_rate":75.0,"wage":21.3,"hours":38.8},{"period":"2012-H2","province":"MB","emp_rate":78.3,"wage":19.66,"hours":38.7},{"period":"2012-H2","province":"NB","emp_rate":77.3,"wage":19.67,"hours":38.9},{"period":"2012-H2","province":"NL","emp_rate":71.9,"wage":20.25,"hours":39.0},{"period":"2012-H2","province":"NS","emp_rate":78.0,"wage":19.3,"hours":38.7},{"period":"2012-H2","province":"OT","emp_rate":77.0,"wage":22.6,"hours":39.0},{"period":"2012-H2","province":"PE","emp_rate":79.7,"wage":20.0,"hours":38.9},{"period":"2012-H2","province":"QC","emp_rate":78.9,"wage":21.0,"hours":37.6},{"period":"2012-H2","province":"SK","emp_rate":79.4,"wage":21.75,"hours":39.2},{"period":"2013-H1","province":"AB","emp_rate":78.7,"wage":23.08,"hours":39.3},{"period":"2013-H1","province":"BC","emp_rate":75.4,"wage":21.97,"hours":38.7},{"period":"2013-H1","province":"MB","emp_rate":78.8,"wage":20.0,"hours":38.5},{"period":"2013-H1","province":"NB","emp_rate":77.6,"wage":18.75,"hours":38.3},{"period":"2013-H1","province":"NL","emp_rate":73.4,"wage":21.98,"hours":38.7},{"period":"2013-H1","province":"NS","emp_rate":77.8,"wage":19.72,"hours":38.4},{"period":"2013-H1","province":"OT","emp_rate":76.7,"wage":23.33,"hours":38.8},{"period":"2013-H1","province":"PE","emp_rate":81.3,"wage":21.0,"hours":38.9},{"period":"2013-H1","province":"QC","emp_rate":80.1,"wage":22.0,"hours":37.5},{"period":"2013-H1","province":"SK","emp_rate":80.8,"wage":22.0,"hours":39.3},{"period":"2013-H2","province":"AB","emp_rate":77.9,"wage":24.0,"hours":39.4},{"period":"2013-H2","province":"BC","emp_rate":76.2,"wage":22.49,"hours":38.8},{"period":"2013-H2","province":"MB","emp_rate":78.8,"wage":20.0,"hours":38.6},{"period":"2013-H2","province":"NB","emp_rate":77.8,"wage":19.0,"hours":38.7},{"period":"2013-H2","province":"NL","emp_rate":73.6,"wage":22.0,"hours":38.9},{"period":"2013-H2","province":"NS","emp_rate":80.5,"wage":19.71,"hours":38.8},{"period":"2013-H2","province":"OT","emp_rate":77.0,"wage":23.0,"hours":38.7},{"period":"2013-H2","province":"PE","emp_rate":79.4,"wage":20.0,"hours":38.8},{"period":"2013-H2","province":"QC","emp_rate":79.6,"wage":21.0,"hours":37.7},{"period":"2013-H2","province":"SK","emp_rate":78.5,"wage":22.89,"hours":39.2},{"period":"2014-H1","province":"AB","emp_rate":77.6,"wage":24.23,"hours":39.9},{"period":"2014-H1","province":"BC","emp_rate":75.4,"wage":22.6,"hours":38.4},{"period":"2014-H1","province":"MB","emp_rate":78.4,"wage":20.52,"hours":38.9},{"period":"2014-H1","province":"NB","emp_rate":76.0,"wage":18.82,"hours":38.2},{"period":"2014-H1","province":"NL","emp_rate":74.0,"wage":22.21,"hours":39.0},{"period":"2014-H1","province":"NS","emp_rate":78.4,"wage":19.98,"hours":38.2},{"period":"2014-H1","province":"OT","emp_rate":76.5,"wage":23.1,"hours":38.8},{"period":"2014-H1","province":"PE","emp_rate":80.0,"wage":20.26,"hours":38.6},{"period":"2014-H1","province":"QC","emp_rate":79.7,"wage":22.5,"hours":37.5},{"period":"2014-H1","province":"SK","emp_rate":78.4,"wage":23.02,"hours":38.6},{"period":"2014-H2","province":"AB","emp_rate":77.1,"wage":25.0,"hours":39.7},{"period":"2014-H2","province":"BC","emp_rate":75.9,"wage":22.6,"hours":38.7},{"period":"2014-H2","province":"MB","emp_rate":78.8,"wage":20.19,"hours":38.8},{"period":"2014-H2","province":"NB","emp_rate":77.4,"wage":20.0,"hours":39.1},{"period":"2014-H2","province":"NL","emp_rate":72.0,"wage":21.63,"hours":38.8},{"period":"2014-H2","province":"NS","emp_rate":77.2,"wage":20.0,"hours":39.0},{"period":"2014-H2","province":"OT","emp_rate":76.3,"wage":24.0,"hours":38.7},{"period":"2014-H2","province":"PE","emp_rate":81.7,"wage":20.0,"hours":39.2},{"period":"2014-H2","province":"QC","emp_rate":78.5,"wage":22.38,"hours":37.9},{"period":"2014-H2","province":"SK","emp_rate":80.4,"wage":23.08,"hours":39.0},{"period":"2015-H1","province":"AB","emp_rate":78.8,"wage":25.0,"hours":39.2},{"period":"2015-H1","province":"BC","emp_rate":76.2,"wage":24.0,"hours":38.5},{"period":"2015-H1","province":"MB","emp_rate":79.4,"wage":20.5,"hours":38.4},{"period":"2015-H1","province":"NB","emp_rate":78.3,"wage":20.33,"hours":38.2},{"period":"2015-H1","province":"NL","emp_rate":72.3,"wage":22.6,"hours":38.7},{"period":"2015-H1","province":"NS","emp_rate":78.7,"wage":21.0,"hours":38.8},{"period":"2015-H1","province":"OT","emp_rate":76.1,"wage":24.0,"hours":38.4},{"period":"2015-H1","province":"PE","emp_rate":81.6,"wage":21.19,"hours":38.7},{"period":"2015-H1","province":"QC","emp_rate":78.9,"wage":22.84,"hours":37.4},{"period":"2015-H1","province":"SK","emp_rate":80.9,"wage":22.66,"hours":39.0},{"period":"2015-H2","province":"AB","emp_rate":77.2,"wage":25.48,"hours":38.9},{"period":"2015-H2","province":"BC","emp_rate":75.9,"wage":22.7,"hours":39.5},{"period":"2015-H2","province":"MB","emp_rate":77.2,"wage":20.9,"hours":39.0},{"period":"2015-H2","province":"NB","emp_rate":78.3,"wage":19.55,"hours":38.6},{"period":"2015-H2","province":"NL","emp_rate":73.8,"wage":21.98,"hours":38.8},{"period":"2015-H2","province":"NS","emp_rate":78.7,"wage":20.44,"hours":38.6},{"period":"2015-H2","province":"OT","emp_rate":76.5,"wage":24.04,"hours":38.7},{"period":"2015-H2","province":"PE","emp_rate":80.8,"wage":20.51,"hours":39.5},{"period":"2015-H2","province":"QC","emp_rate":80.7,"wage":22.84,"hours":37.6},{"period":"2015-H2","province":"SK","emp_rate":79.4,"wage":24.34,"hours":39.4},{"period":"2016-H1","province":"AB","emp_rate":76.6,"wage":27.4,"hours":39.1},{"period":"2016-H1","province":"BC","emp_rate":77.2,"wage":23.08,"hours":38.5},{"period":"2016-H1","province":"MB","emp_rate":77.3,"wage":21.2,"hours":38.5},{"period":"2016-H1","province":"NB","emp_rate":80.2,"wage":20.51,"hours":38.2},{"period":"2016-H1","province":"NL","emp_rate":73.7,"wage":21.75,"hours":38.8},{"period":"2016-H1","province":"NS","emp_rate":78.0,"wage":21.63,"hours":38.3},{"period":"2016-H1","province":"OT","emp_rate":76.5,"wage":25.0,"hours":38.7},{"period":"2016-H1","province":"PE","emp_rate":80.4,"wage":20.95,"hours":39.0},{"period":"2016-H1","province":"QC","emp_rate":79.7,"wage":23.63,"hours":37.3},{"period":"2016-H1","province":"SK","emp_rate":79.8,"wage":24.0,"hours":39.3},{"period":"2016-H2","province":"AB","emp_rate":75.2,"wage":26.44,"hours":39.1},{"period":"2016-H2","province":"BC","emp_rate":77.5,"wage":23.08,"hours":39.0},{"period":"2016-H2","province":"MB","emp_rate":79.2,"wage":21.35,"hours":39.1},{"period":"2016-H2","province":"NB","emp_rate":80.4,"wage":21.0,"hours":38.7},{"period":"2016-H2","province":"NL","emp_rate":73.9,"wage":20.71,"hours":39.2},{"period":"2016-H2","province":"NS","emp_rate":78.3,"wage":21.0,"hours":38.9},{"period":"2016-H2","province":"OT","emp_rate":75.6,"wage":24.35,"hours":38.9},{"period":"2016-H2","province":"PE","emp_rate":76.2,"wage":21.0,"hours":38.8},{"period":"2016-H2","province":"QC","emp_rate":80.8,"wage":23.0,"hours":37.8},{"period":"2016-H2","province":"SK","emp_rate":79.6,"wage":24.04,"hours":39.4},{"period":"2017-H1","province":"AB","emp_rate":76.1,"wage":27.0,"hours":39.1},{"period":"2017-H1","province":"BC","emp_rate":79.0,"wage":23.56,"hours":38.9},{"period":"2017-H1","province":"MB","emp_rate":79.5,"wage":22.05,"hours":38.4},{"period":"2017-H1","province":"NB","emp_rate":80.1,"wage":22.05,"hours":38.3},{"period":"2017-H1","province":"NL","emp_rate":73.5,"wage":23.0,"hours":38.5},{"period":"2017-H1","province":"NS","emp_rate":79.9,"wage":21.63,"hours":38.4},{"period":"2017-H1","province":"OT","emp_rate":77.0,"wage":24.29,"hours":38.9},{"period":"2017-H1","province":"PE","emp_rate":81.6,"wage":22.65,"hours":38.2},{"period":"2017-H1","province":"QC","emp_rate":81.3,"wage":24.18,"hours":37.2},{"period":"2017-H1","province":"SK","emp_rate":78.0,"wage":25.0,"hours":38.7},{"period":"2017-H2","province":"AB","emp_rate":76.1,"wage":26.44,"hours":39.3},{"period":"2017-H2","province":"BC","emp_rate":79.1,"wage":24.0,"hours":39.2},{"period":"2017-H2","province":"MB","emp_rate":80.2,"wage":21.17,"hours":38.7},{"period":"2017-H2","province":"NB","emp_rate":79.8,"wage":21.0,"hours":39.2},{"period":"2017-H2","province":"NL","emp_rate":75.3,"wage":23.0,"hours":39.0},{"period":"2017-H2","province":"NS","emp_rate":79.8,"wage":21.0,"hours":38.8},{"period":"2017-H2","province":"OT","emp_rate":76.8,"wage":24.52,"hours":38.8},{"period":"2017-H2","province":"PE","emp_rate":78.3,"wage":21.11,"hours":38.7},{"period":"2017-H2","province":"QC","emp_rate":82.5,"wage":24.18,"hours":37.6},{"period":"2017-H2","province":"SK","emp_rate":78.6,"wage":25.0,"hours":39.0},{"period":"2018-H1","province":"AB","emp_rate":77.3,"wage":27.4,"hours":39.0},{"period":"2018-H1","province":"BC","emp_rate":78.2,"wage":24.62,"hours":38.5},{"period":"2018-H1","province":"MB","emp_rate":78.0,"wage":22.06,"hours":38.6},{"period":"2018-H1","province":"NB","emp_rate":78.7,"wage":22.26,"hours":38.5},{"period":"2018-H1","province":"NL","emp_rate":73.8,"wage":24.91,"hours":38.1},{"period":"2018-H1","province":"NS","emp_rate":79.0,"wage":21.54,"hours":38.8},{"period":"2018-H1","province":"OT","emp_rate":76.2,"wage":25.0,"hours":38.7},{"period":"2018-H1","province":"PE","emp_rate":78.0,"wage":23.0,"hours":38.5},{"period":"2018-H1","province":"QC","emp_rate":82.2,"wage":25.0,"hours":37.5},{"period":"2018-H1","province":"SK","emp_rate":79.6,"wage":25.0,"hours":38.7},{"period":"2018-H2","province":"AB","emp_rate":79.0,"wage":25.96,"hours":39.3},{"period":"2018-H2","province":"BC","emp_rate":78.5,"wage":24.0,"hours":38.9},{"period":"2018-H2","province":"MB","emp_rate":77.8,"wage":23.0,"hours":38.9},{"period":"2018-H2","province":"NB","emp_rate":79.1,"wage":21.0,"hours":38.7},{"period":"2018-H2","province":"NL","emp_rate":72.4,"wage":24.61,"hours":39.0},{"period":"2018-H2","province":"NS","emp_rate":78.7,"wage":22.5,"hours":38.8},{"period":"2018-H2","province":"OT","emp_rate":77.9,"wage":25.64,"hours":39.0},{"period":"2018-H2","province":"PE","emp_rate":80.2,"wage":21.69,"hours":39.6},{"period":"2018-H2","province":"QC","emp_rate":82.9,"wage":23.93,"hours":37.7},{"period":"2018-H2","province":"SK","emp_rate":79.1,"wage":26.0,"hours":39.0},{"period":"2019-H1","province":"AB","emp_rate":78.8,"wage":28.75,"hours":39.0},{"period":"2019-H1","province":"BC","emp_rate":80.7,"wage":24.04,"hours":38.1},{"period":"2019-H1","province":"MB","emp_rate":78.1,"wage":24.62,"hours":38.3},{"period":"2019-H1","province":"NB","emp_rate":81.0,"wage":21.63,"hours":38.2},{"period":"2019-H1","province":"NL","emp_rate":75.4,"wage":24.29,"hours":38.9},{"period":"2019-H1","province":"NS","emp_rate":80.6,"wage":23.0,"hours":38.5},{"period":"2019-H1","province":"OT","emp_rate":78.2,"wage":25.64,"hours":38.7},{"period":"2019-H1","province":"PE","emp_rate":79.6,"wage":24.0,"hours":38.7},{"period":"2019-H1","province":"QC","emp_rate":83.2,"wage":25.0,"hours":37.4},{"period":"2019-H1","province":"SK","emp_rate":80.0,"wage":25.0,"hours":38.8},{"period":"2019-H2","province":"AB","emp_rate":77.9,"wage":28.57,"hours":39.1},{"period":"2019-H2","province":"BC","emp_rate":81.0,"wage":25.0,"hours":38.7},{"period":"2019-H2","province":"MB","emp_rate":77.2,"wage":23.82,"hours":38.8},{"period":"2019-H2","province":"NB","emp_rate":78.3,"wage":22.33,"hours":38.8},{"period":"2019-H2","province":"NL","emp_rate":72.5,"wage":23.5,"hours":38.7},{"period":"2019-H2","province":"NS","emp_rate":81.2,"wage":22.0,"hours":38.6},{"period":"2019-H2","province":"OT","emp_rate":77.9,"wage":26.67,"hours":38.8},{"period":"2019-H2","province":"PE","emp_rate":81.2,"wage":21.83,"hours":39.0},{"period":"2019-H2","province":"QC","emp_rate":84.2,"wage":25.0,"hours":37.7},{"period":"2019-H2","province":"SK","emp_rate":79.5,"wage":25.38,"hours":39.0},{"period":"2020-H1","province":"AB","emp_rate":77.9,"wage":28.02,"hours":39.0},{"period":"2020-H1","province":"BC","emp_rate":80.4,"wage":26.0,"hours":38.7},{"period":"2020-H1","province":"MB","emp_rate":79.7,"wage":23.97,"hours":38.7},{"period":"2020-H1","province":"NB","emp_rate":80.1,"wage":22.35,"hours":38.3},{"period":"2020-H1","province":"NL","emp_rate":76.4,"wage":24.65,"hours":38.7},{"period":"2020-H1","province":"NS","emp_rate":81.0,"wage":21.98,"hours":38.4},{"period":"2020-H1","province":"OT","emp_rate":78.0,"wage":27.0,"hours":38.7},{"period":"2020-H1","province":"PE","emp_rate":82.3,"wage":24.0,"hours":38.8},{"period":"2020-H1","province":"QC","emp_rate":83.8,"wage":26.17,"hours":37.2},{"period":"2020-H1","province":"SK","emp_rate":81.9,"wage":26.44,"hours":39.0},{"period":"2020-H2","province":"AB","emp_rate":74.2,"wage":30.18,"hours":39.0},{"period":"2020-H2","province":"BC","emp_rate":74.5,"wage":26.44,"hours":38.7},{"period":"2020-H2","province":"MB","emp_rate":76.3,"wage":23.65,"hours":38.5},{"period":"2020-H2","province":"NB","emp_rate":80.9,"wage":23.59,"hours":38.4},{"period":"2020-H2","province":"NL","emp_rate":76.1,"wage":26.0,"hours":38.7},{"period":"2020-H2","province":"NS","emp_rate":77.5,"wage":23.56,"hours":38.6},{"period":"2020-H2","province":"OT","emp_rate":73.2,"wage":28.72,"hours":38.5},{"period":"2020-H2","province":"PE","emp_rate":76.4,"wage":24.04,"hours":39.2},{"period":"2020-H2","province":"QC","emp_rate":80.3,"wage":28.48,"hours":37.5},{"period":"2020-H2","province":"SK","emp_rate":77.6,"wage":28.71,"hours":38.9},{"period":"2021-H1","province":"AB","emp_rate":74.7,"wage":31.25,"hours":38.8},{"period":"2021-H1","province":"BC","emp_rate":78.8,"wage":28.34,"hours":38.5},{"period":"2021-H1","province":"MB","emp_rate":75.6,"wage":25.18,"hours":38.4},{"period":"2021-H1","province":"NB","emp_rate":82.2,"wage":24.0,"hours":38.2},{"period":"2021-H1","province":"NL","emp_rate":74.4,"wage":26.44,"hours":38.5},{"period":"2021-H1","province":"NS","emp_rate":83.7,"wage":25.48,"hours":38.4},{"period":"2021-H1","province":"OT","emp_rate":74.6,"wage":29.04,"hours":38.5},{"period":"2021-H1","province":"PE","emp_rate":79.9,"wage":25.3,"hours":38.5},{"period":"2021-H1","province":"QC","emp_rate":81.0,"wage":27.02,"hours":37.1},{"period":"2021-H1","province":"SK","emp_rate":78.7,"wage":27.2,"hours":38.8},{"period":"2021-H2","province":"AB","emp_rate":75.8,"wage":29.21,"hours":39.1},{"period":"2021-H2","province":"BC","emp_rate":79.3,"wage":27.98,"hours":38.7},{"period":"2021-H2","province":"MB","emp_rate":78.8,"wage":25.0,"hours":39.0},{"period":"2021-H2","province":"NB","emp_rate":80.3,"wage":24.38,"hours":38.6},{"period":"2021-H2","province":"NL","emp_rate":77.5,"wage":24.62,"hours":39.2},{"period":"2021-H2","province":"NS","emp_rate":80.8,"wage":26.15,"hours":38.6},{"period":"2021-H2","province":"OT","emp_rate":78.1,"wage":29.1,"hours":38.4},{"period":"2021-H2","province":"PE","emp_rate":81.8,"wage":24.54,"hours":39.1},{"period":"2021-H2","province":"QC","emp_rate":82.4,"wage":27.47,"hours":37.4},{"period":"2021-H2","province":"SK","emp_rate":79.0,"wage":28.21,"hours":39.2},{"period":"2022-H1","province":"AB","emp_rate":79.3,"wage":30.0,"hours":38.9},{"period":"2022-H1","province":"BC","emp_rate":80.1,"wage":29.01,"hours":38.7},{"period":"2022-H1","province":"MB","emp_rate":81.2,"wage":26.0,"hours":38.4},{"period":"2022-H1","province":"NB","emp_rate":80.5,"wage":25.96,"hours":38.2},{"period":"2022-H1","province":"NL","emp_rate":77.9,"wage":26.78,"hours":38.3},{"period":"2022-H1","province":"NS","emp_rate":80.0,"wage":23.5,"hours":39.0},{"period":"2022-H1","province":"OT","emp_rate":77.6,"wage":28.87,"hours":38.8},{"period":"2022-H1","province":"PE","emp_rate":81.1,"wage":26.0,"hours":38.4},{"period":"2022-H1","province":"QC","emp_rate":84.0,"wage":28.0,"hours":37.4},{"period":"2022-H1","province":"SK","emp_rate":81.9,"wage":29.5,"hours":38.9},{"period":"2022-H2","province":"AB","emp_rate":80.5,"wage":30.0,"hours":39.3},{"period":"2022-H2","province":"BC","emp_rate":81.5,"wage":28.85,"hours":39.1},{"period":"2022-H2","province":"MB","emp_rate":81.5,"wage":25.64,"hours":39.1},{"period":"2022-H2","province":"NB","emp_rate":82.9,"wage":25.0,"hours":38.5},{"period":"2022-H2","province":"NL","emp_rate":77.8,"wage":27.0,"hours":38.4},{"period":"2022-H2","province":"NS","emp_rate":80.3,"wage":25.0,"hours":38.7},{"period":"2022-H2","province":"OT","emp_rate":80.0,"wage":30.0,"hours":38.9},{"period":"2022-H2","province":"PE","emp_rate":83.7,"wage":26.0,"hours":39.1},{"period":"2022-H2","province":"QC","emp_rate":84.9,"wage":29.29,"hours":37.3},{"period":"2022-H2","province":"SK","emp_rate":82.8,"wage":28.0,"hours":39.9},{"period":"2023-H1","province":"AB","emp_rate":79.8,"wage":30.0,"hours":39.1},{"period":"2023-H1","province":"BC","emp_rate":81.5,"wage":30.0,"hours":38.6},{"period":"2023-H1","province":"MB","emp_rate":81.4,"wage":26.64,"hours":38.7},{"period":"2023-H1","province":"NB","emp_rate":82.5,"wage":28.85,"hours":38.3},{"period":"2023-H1","province":"NL","emp_rate":80.0,"wage":28.0,"hours":39.3},{"period":"2023-H1","province":"NS","emp_rate":83.1,"wage":26.37,"hours":38.6},{"period":"2023-H1","province":"OT","emp_rate":80.7,"wage":30.5,"hours":38.8},{"period":"2023-H1","province":"PE","emp_rate":84.3,"wage":28.85,"hours":38.4},{"period":"2023-H1","province":"QC","emp_rate":85.9,"wage":30.0,"hours":37.4},{"period":"2023-H1","province":"SK","emp_rate":81.2,"wage":30.0,"hours":39.1},{"period":"2023-H2","province":"AB","emp_rate":80.0,"wage":31.25,"hours":39.1},{"period":"2023-H2","province":"BC","emp_rate":80.3,"wage":31.0,"hours":38.4},{"period":"2023-H2","province":"MB","emp_rate":81.9,"wage":26.67,"hours":39.0},{"period":"2023-H2","province":"NB","emp_rate":81.4,"wage":26.92,"hours":38.9},{"period":"2023-H2","province":"NL","emp_rate":79.5,"wage":28.0,"hours":38.8},{"period":"2023-H2","province":"NS","emp_rate":81.7,"wage":28.0,"hours":38.8},{"period":"2023-H2","province":"OT","emp_rate":80.3,"wage":31.6,"hours":38.9},{"period":"2023-H2","province":"PE","emp_rate":81.9,"wage":27.0,"hours":39.5},{"period":"2023-H2","province":"QC","emp_rate":86.1,"wage":30.03,"hours":37.8},{"period":"2023-H2","province":"SK","emp_rate":80.7,"wage":28.85,"hours":39.7},{"period":"2024-H1","province":"AB","emp_rate":79.4,"wage":30.29,"hours":38.8},{"period":"2024-H1","province":"BC","emp_rate":80.5,"wage":33.0,"hours":38.6},{"period":"2024-H1","province":"MB","emp_rate":81.9,"wage":27.69,"hours":38.5},{"period":"2024-H1","province":"NB","emp_rate":81.8,"wage":30.0,"hours":38.2},{"period":"2024-H1","province":"NL","emp_rate":79.4,"wage":28.85,"hours":38.7},{"period":"2024-H1","province":"NS","emp_rate":81.2,"wage":27.69,"hours":39.2},{"period":"2024-H1","province":"OT","emp_rate":79.9,"wage":33.65,"hours":38.8},{"period":"2024-H1","province":"PE","emp_rate":81.1,"wage":28.0,"hours":38.1},{"period":"2024-H1","province":"QC","emp_rate":84.3,"wage":32.0,"hours":37.2},{"period":"2024-H1","province":"SK","emp_rate":83.0,"wage":29.81,"hours":38.6},{"period":"2024-H2","province":"AB","emp_rate":77.9,"wage":31.73,"hours":38.8},{"period":"2024-H2","province":"BC","emp_rate":79.2,"wage":33.33,"hours":38.3},{"period":"2024-H2","province":"MB","emp_rate":80.9,"wage":27.0,"hours":38.7},{"period":"2024-H2","province":"NB","emp_rate":83.0,"wage":28.85,"hours":38.4},{"period":"2024-H2","province":"NL","emp_rate":80.8,"wage":28.48,"hours":38.6},{"period":"2024-H2","province":"NS","emp_rate":81.2,"wage":29.0,"hours":38.6},{"period":"2024-H2","province":"OT","emp_rate":80.1,"wage":32.69,"hours":38.8},{"period":"2024-H2","province":"PE","emp_rate":79.5,"wage":30.0,"hours":39.1},{"period":"2024-H2","province":"QC","emp_rate":83.5,"wage":32.72,"hours":37.4},{"period":"2024-H2","province":"SK","emp_rate":80.4,"wage":30.0,"hours":38.7},{"period":"2025-H1","province":"AB","emp_rate":77.0,"wage":32.93,"hours":38.9},{"period":"2025-H1","province":"BC","emp_rate":80.7,"wage":33.75,"hours":38.6},{"period":"2025-H1","province":"MB","emp_rate":81.0,"wage":28.85,"hours":38.5},{"period":"2025-H1","province":"NB","emp_rate":82.4,"wage":30.39,"hours":38.1},{"period":"2025-H1","province":"NL","emp_rate":81.2,"wage":30.26,"hours":38.6},{"period":"2025-H1","province":"NS","emp_rate":81.2,"wage":30.81,"hours":38.7},{"period":"2025-H1","province":"OT","emp_rate":78.5,"wage":34.29,"hours":38.5},{"period":"2025-H1","province":"PE","emp_rate":82.7,"wage":31.25,"hours":37.6},{"period":"2025-H1","province":"QC","emp_rate":85.2,"wage":32.5,"hours":37.0},{"period":"2025-H1","province":"SK","emp_rate":82.0,"wage":31.97,"hours":38.7},{"period":"2025-H2","province":"AB","emp_rate":76.7,"wage":33.5,"hours":39.4},{"period":"2025-H2","province":"BC","emp_rate":79.9,"wage":34.58,"hours":38.6},{"period":"2025-H2","province":"MB","emp_rate":79.0,"wage":27.82,"hours":38.8},{"period":"2025-H2","province":"NB","emp_rate":80.6,"wage":30.0,"hours":38.6},{"period":"2025-H2","province":"NL","emp_rate":78.4,"wage":32.21,"hours":39.0},{"period":"2025-H2","province":"NS","emp_rate":80.2,"wage":31.02,"hours":38.7},{"period":"2025-H2","province":"OT","emp_rate":78.5,"wage":35.22,"hours":38.6},{"period":"2025-H2","province":"PE","emp_rate":83.0,"wage":31.97,"hours":39.0},{"period":"2025-H2","province":"QC","emp_rate":84.9,"wage":34.0,"hours":37.2},{"period":"2025-H2","province":"SK","emp_rate":83.6,"wage":30.0,"hours":38.8},{"period":"2026-H1","province":"AB","emp_rate":78.5,"wage":32.97,"hours":39.1},{"period":"2026-H1","province":"BC","emp_rate":80.8,"wage":33.75,"hours":40.5},{"period":"2026-H1","province":"MB","emp_rate":80.9,"wage":29.49,"hours":38.1},{"period":"2026-H1","province":"NB","emp_rate":82.0,"wage":32.0,"hours":38.0},{"period":"2026-H1","province":"NL","emp_rate":80.3,"wage":31.0,"hours":38.6},{"period":"2026-H1","province":"NS","emp_rate":80.0,"wage":33.14,"hours":38.5},{"period":"2026-H1","province":"OT","emp_rate":78.0,"wage":35.9,"hours":38.5},{"period":"2026-H1","province":"PE","emp_rate":85.4,"wage":32.0,"hours":38.5},{"period":"2026-H1","province":"QC","emp_rate":83.9,"wage":34.36,"hours":37.3},{"period":"2026-H1","province":"SK","emp_rate":81.6,"wage":30.02,"hours":38.8}];
+const PERIODS=["2006-H2","2007-H1","2007-H2","2008-H1","2008-H2","2009-H1","2009-H2","2010-H1","2010-H2","2011-H1","2011-H2","2012-H1","2012-H2","2013-H1","2013-H2","2014-H1","2014-H2","2015-H1","2015-H2","2016-H1","2016-H2","2017-H1","2017-H2","2018-H1","2018-H2","2019-H1","2019-H2","2020-H1","2020-H2","2021-H1","2021-H2","2022-H1","2022-H2","2023-H1","2023-H2","2024-H1","2024-H2","2025-H1","2025-H2","2026-H1"];
+
+
+const PROV_NAMES={AB:"Alberta",BC:"B.C.",OT:"Ontario",MB:"Manitoba",NL:"Newfoundland",NS:"Nova Scotia",SK:"Saskatchewan",PE:"P.E.I.",NB:"New Brunswick",QC:"Québec"};
+
+// Short x-axis label: '06H2, '07H1 etc.
+function shortLabel(p){ return `'${p.slice(2,4)}H${p.slice(-1)}`; }
+
+const EVENTS = {
+  gfc:{
+    label:"2008-09 Global Financial Crisis",
+    badge:"badge-recession", badgeText:"Recession",
+    shockStart:"2008-H2", shockEnd:"2009-H2", bandColor:"#fef3c7",
+    desc:"In the second half of 2008, a collapse in global financial markets triggered Canada's worst recession since the 1990s. Canadian banks and exporters were hit hard as credit froze and demand for manufactured goods collapsed. The goods-producing sector - dominated by male workers in construction, auto manufacturing, and resource extraction - shed jobs rapidly. Women, who were more concentrated in public-sector services like healthcare, education, and government, were comparatively shielded. The Bank of Canada cut interest rates aggressively and the federal government launched a major stimulus package, helping Canada recover faster than most peer economies by 2010.",
+    annotations:{
+      emp_rate:{
+        men:[
+          {period:"2008-H2", text:"Recession officially begins - goods sector starts shedding jobs"},
+          {period:"2009-H1", text:"Employment rate hits trough for men; manufacturing and construction hardest hit"},
+          {period:"2010-H1", text:"Men's employment begins recovering as stimulus spending kicks in"},
+        ],
+        women:[
+          {period:"2009-H1", text:"Women's employment rate dips modestly - public sector provided a buffer"},
+          {period:"2010-H1", text:"Women recover employment rate faster than men relative to their drop"},
+        ]
+      },
+      wage:{
+        men:[
+          {period:"2009-H2", text:"Wages stagnate but hold - fewer hours worked rather than outright pay cuts"},
+          {period:"2010-H2", text:"Wage growth resumes as labour market tightens post-recession"},
+        ],
+        women:[
+          {period:"2009-H1", text:"Women's wages continue rising slowly even through the downturn"},
+        ]
+      }
+    }
+  },
+  oil:{
+    label:"Oil Price Crash",
+    badge:"badge-oil", badgeText:"Resource Shock",
+    shockStart:"2014-H2", shockEnd:"2016-H2", bandColor:"#ffedd5",
+    desc:"A global oil glut caused crude prices to collapse from mid-2014 onward, bottoming out in early 2016. Alberta was devastated - tens of thousands of oilpatch jobs vanished in mining, oil and gas extraction, and the support services around them. Because resource extraction in Canada is overwhelmingly male-dominated, men bore the vast majority of job losses. Women in the same provinces were more likely to work in healthcare, retail, and education, which were less directly exposed to the price crash. Outside Alberta and Saskatchewan, most provinces were actually insulated or benefited from lower energy input costs.",
+    annotations:{
+      emp_rate:{
+        men:[
+          {period:"2014-H2", text:"Oil prices begin falling sharply - Alberta oilpatch starts contracting"},
+          {period:"2015-H2", text:"Men's employment rate in AB drops significantly as layoffs accelerate"},
+          {period:"2016-H2", text:"Employment stabilizes as oil prices begin recovering from historic lows"},
+        ],
+        women:[
+          {period:"2015-H1", text:"Women's employment rate in AB sees a smaller and more gradual decline"},
+          {period:"2016-H1", text:"Women less exposed to resource sector - healthcare and public services hold"},
+        ]
+      },
+      wage:{
+        men:[
+          {period:"2015-H2", text:"Wages hold or rise despite layoffs - lower-paid workers exited the sector first, raising the average"},
+          {period:"2017-H1", text:"Wage growth resumes as oil recovers and labour demand returns"},
+        ],
+        women:[
+          {period:"2016-H1", text:"Women's wages in AB and SK remain stable through the crash"},
+        ]
+      }
+    }
+  },
+  covid:{
+    label:"COVID-19 Pandemic",
+    badge:"badge-pandemic", badgeText:"Pandemic",
+    shockStart:"2020-H1", shockEnd:"2022-H2", bandColor:"#fce7f3",
+    desc:"Provincial lockdowns beginning in March 2020 caused the sharpest and fastest labour market contraction in Canadian history. Unlike previous recessions where men were hit hardest, COVID-19 disproportionately affected women - hospitality, retail, personal care, and childcare are female-dominated sectors and were the first to be shut down. Many women also left the workforce temporarily to care for children whose schools and daycares had closed. When the economy reopened, a historically tight labour market drove rapid wage growth, and women's wages rose faster than men's during the recovery period, slightly narrowing the long-standing gender wage gap.",
+    annotations:{
+      emp_rate:{
+        men:[
+          {period:"2020-H1", text:"Initial lockdowns hit construction, transportation, and retail - male employment drops"},
+          {period:"2020-H2", text:"Employment begins recovering as construction and goods sectors reopen ahead of services"},
+          {period:"2021-H2", text:"Men's employment rate largely restored to pre-pandemic levels"},
+        ],
+        women:[
+          {period:"2020-H1", text:"Hospitality, retail, childcare, and personal services - all female-dominated - shut down immediately"},
+          {period:"2021-H1", text:"Partial reopening brings women back but capacity limits keep service employment below normal"},
+          {period:"2022-H1", text:"Women's employment rate fully recovers as restrictions lift and services reopen"},
+        ]
+      },
+      wage:{
+        men:[
+          {period:"2021-H1", text:"Post-pandemic labour shortage drives wage growth across goods and trades sectors"},
+          {period:"2022-H2", text:"Wages continue rising as employers compete for workers in a historically tight market"},
+        ],
+        women:[
+          {period:"2021-H2", text:"Women's wages surge faster than men's during recovery - the gender wage gap narrows"},
+          {period:"2022-H1", text:"Service sector wage increases accelerate as workers gain bargaining power post-COVID"},
+        ]
+      }
+    }
+  },
+  inflation:{
+    label:"Post-COVID Inflation Surge",
+    badge:"badge-inflation", badgeText:"Inflation",
+    shockStart:"2022-H1", shockEnd:"2023-H1", bandColor:"#ede9fe",
+    desc:"Canada experienced its highest inflation in four decades through 2022, driven by a combination of pandemic-era supply chain disruptions, pent-up consumer demand, and rising energy prices. The Bank of Canada raised its policy interest rate dramatically to combat inflation. While this slowed hiring in interest-rate-sensitive sectors like housing and finance, the broader labour market remained tight and nominal wages continued growing across genders and provinces. Real wages - adjusted for inflation - actually declined for many workers, particularly those in lower-wage service jobs disproportionately held by women.",
+    annotations:{
+      emp_rate:{
+        men:[
+          {period:"2022-H1", text:"Employment fully recovered - construction and trades boom despite rate hikes"},
+          {period:"2023-H1", text:"Higher borrowing costs begin slowing hiring in rate-sensitive industries"},
+        ],
+        women:[
+          {period:"2022-H2", text:"Women's employment reaches or exceeds pre-pandemic levels in most provinces"},
+          {period:"2023-H1", text:"Part-time and service employment softens slightly as consumer spending cools"},
+        ]
+      },
+      wage:{
+        men:[
+          {period:"2022-H1", text:"Nominal wages rise sharply but inflation erodes real purchasing power"},
+          {period:"2023-H1", text:"Wage growth slows as labour market cools in response to Bank of Canada hikes"},
+        ],
+        women:[
+          {period:"2022-H1", text:"Women's nominal wages rising fastest in decades - gap with men continues narrowing"},
+          {period:"2023-H1", text:"Real wage gains modest for lower-income women despite strong nominal numbers"},
+        ]
+      }
+    }
+  },
+  tariff:{
+    label:"US-Canada Trade & Tariff Shock",
+    badge:"badge-tariff", badgeText:"Trade Shock",
+    shockStart:"2025-H1", shockEnd:"2026-H1", bandColor:"#dcfce7",
+    desc:"Threatened and imposed US tariffs in early 2025 created significant uncertainty for Canadian exporters, particularly in Ontario and Québec where manufacturing is deeply integrated into cross-border supply chains. Sectors like auto parts, steel, and aluminium faced direct pressure. However, Canada's broader labour market proved more resilient than feared - resource-producing provinces like Alberta and Saskatchewan were largely insulated by strong commodity prices, and service sectors continued expanding. The Bank of Canada cut interest rates multiple times through 2024-25, helping cushion the impact on employment.",
+    annotations:{
+      emp_rate:{
+        men:[
+          {period:"2025-H1", text:"Tariff uncertainty hits trade-exposed manufacturing sectors in ON and QC - male-dominated trades feel initial pressure"},
+          {period:"2025-H2", text:"AB and SK men's employment holds firm - resource sector insulated from trade shock"},
+        ],
+        women:[
+          {period:"2025-H1", text:"Services sector employment - more female-dominated - remains more insulated from tariff impact"},
+          {period:"2026-H1", text:"Women's employment rate largely stable as domestic services continue expanding"},
+        ]
+      },
+      wage:{
+        men:[
+          {period:"2025-H1", text:"Wage growth slows in trade-exposed provinces but holds nationally"},
+          {period:"2025-H2", text:"AB and SK men see continued strong wages backed by energy and agriculture"},
+        ],
+        women:[
+          {period:"2025-H2", text:"Women's wages continue gradual upward trend despite trade headwinds"},
+        ]
+      }
+    }
+  }
+};
+
+let currentEvent  = 'gfc';
+let currentProv   = 'AB';
+let currentMetric = 'emp_rate';
+
+const METRIC_TITLE = {
+  emp_rate: { men:"Men - Employment Rate (%)",   women:"Women - Employment Rate (%)" },
+  wage:     { men:"Men - Median Hourly Wage (CAD)", women:"Women - Median Hourly Wage (CAD)" }
+};
+
+// ── wiring ──
+document.querySelectorAll('.event-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.event-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentEvent=btn.dataset.event;
+    redraw();
+  });
+});
+
+document.querySelectorAll('.prov-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.prov-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentProv=btn.dataset.prov;
+    document.getElementById('prov-label-text').textContent=PROV_NAMES[currentProv]||currentProv;
+    redraw();
+  });
+});
+
+document.querySelectorAll('.metric-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.metric-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMetric=btn.dataset.metric;
+    redraw();
+  });
+});
+
+// ── summary card ──
+function renderSummary(evKey){
+  const ev=EVENTS[evKey];
+  document.getElementById('ev-summary').innerHTML=`
+    <div class="ev-info">
+      <span class="ev-badge ${ev.badge}">${ev.badgeText}</span>
+      <h3>${ev.label}</h3>
+      <p>${ev.desc}</p>
+    </div>
+  `;
+}
+
+// ── chart builder ──
+function buildChart(svgId, gender, evCfg, prov, metric){
+  const svgEl=document.getElementById(svgId);
+  const W=svgEl.clientWidth||560;
+  const H=280;
+  const mg={top:16, right:20, bottom:52, left:48};
+  const w=W-mg.left-mg.right;
+  const h=H-mg.top-mg.bottom;
+
+  const svg=d3.select(`#${svgId}`);
+  svg.selectAll('*').remove();
+  svg.attr('height',H);
+
+  const source = gender==='men' ? MEN_DATA : WOMEN_DATA;
+  const color  = gender==='men' ? 'var(--men)' : 'var(--women)';
+
+  const provRows = source
+    .filter(d=>d.province===prov)
+    .sort((a,b)=>PERIODS.indexOf(a.period)-PERIODS.indexOf(b.period));
+
+  if(!provRows.length) return;
+
+  const val=d=>d[metric];
+  const allVals=provRows.map(val).filter(v=>v!=null);
+  if(!allVals.length) return;
+
+  const xSc=d3.scalePoint().domain(PERIODS).range([0,w]).padding(0.1);
+  const pad=(d3.max(allVals)-d3.min(allVals))*0.12||1;
+  const yMin=d3.min(allVals)-pad;
+  const yMax=d3.max(allVals)+pad;
+  const ySc=d3.scaleLinear().domain([yMin,yMax]).range([h,0]);
+
+  const g=svg.append('g').attr('transform',`translate(${mg.left},${mg.top})`);
+
+  // shock band
+  const sx0=xSc(evCfg.shockStart)??0;
+  const sx1=(xSc(evCfg.shockEnd)??sx0)+xSc.step()*0.6;
+  g.append('rect').attr('x',sx0).attr('y',0).attr('width',sx1-sx0).attr('height',h)
+    .attr('fill',evCfg.bandColor).attr('opacity',.7);
+
+  // grid
+  g.append('g').attr('class','grid')
+    .call(d3.axisLeft(ySc).ticks(5).tickSize(-w).tickFormat(''))
+    .call(g=>g.select('.domain').remove());
+
+  // x-axis: every 2 periods = every year (H1 and H2 per year, so step of 2 = one label per year)
+  const xTicks=PERIODS.filter((_,i)=>i%2===0);
+  g.append('g').attr('class','axis').attr('transform',`translate(0,${h})`)
+    .call(d3.axisBottom(xSc).tickValues(xTicks).tickFormat(p=>shortLabel(p)))
+    .selectAll('text')
+    .attr('transform','rotate(-40)')
+    .attr('text-anchor','end')
+    .attr('dx','-4px').attr('dy','2px')
+    .style('font-size','10px');
+
+  // y-axis
+  g.append('g').attr('class','axis')
+    .call(d3.axisLeft(ySc).ticks(5).tickFormat(d=>metric==='wage'?`$${d}`:`${d}%`));
+
+  // line
+  const lineGen=d3.line().x(d=>xSc(d.period)).y(d=>ySc(val(d))).curve(d3.curveMonotoneX).defined(d=>val(d)!=null);
+  g.append('path').datum(provRows).attr('fill','none').attr('stroke',color).attr('stroke-width',2.2).attr('d',lineGen);
+
+  // dot markers on annotated data points only
+  const annList=(evCfg.annotations?.[metric]?.[gender])||[];
+  annList.forEach(ann=>{
+    const row=provRows.find(r=>r.period===ann.period);
+    if(!row||val(row)==null) return;
+    g.append('circle')
+      .attr('cx',xSc(ann.period)).attr('cy',ySc(val(row))).attr('r',4)
+      .attr('fill',color).attr('stroke','#fff').attr('stroke-width',1.5);
+  });
+}
+
+// ── render annotation list below a chart card ──
+function renderAnnList(elId, gender, evCfg, metric){
+  const el=document.getElementById(elId);
+  const color=gender==='men'?'var(--men)':'var(--women)';
+  const annList=(evCfg.annotations?.[metric]?.[gender])||[];
+  if(!annList.length){ el.innerHTML=''; return; }
+  el.innerHTML=`
+    <div class="ann-list-title">Key observations</div>
+    ${annList.map(ann=>`
+      <div class="ann-item">
+        <div class="ann-dot" style="background:${color}"></div>
+        <span class="ann-period">${shortLabel(ann.period)}</span>
+        <span class="ann-text">${ann.text}</span>
+      </div>`).join('')}
+  `;
+}
+
+function redraw(){
+  const ev=EVENTS[currentEvent];
+  renderSummary(currentEvent);
+  document.getElementById('title-men').textContent   = METRIC_TITLE[currentMetric].men;
+  document.getElementById('title-women').textContent = METRIC_TITLE[currentMetric].women;
+  buildChart('c-men',   'men',   ev, currentProv, currentMetric);
+  buildChart('c-women', 'women', ev, currentProv, currentMetric);
+  renderAnnList('ann-men',   'men',   ev, currentMetric);
+  renderAnnList('ann-women', 'women', ev, currentMetric);
+}
+
+redraw();
+window.addEventListener('resize', redraw);
+</script>
+</body>
+</html>

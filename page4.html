@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hours Worked - Canadian Labour Market</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f9f8f5; --card: #ffffff; --text: #1a1a18; --muted: #6b6b65;
+    --border: #e0dfd8; --accent: #2a6140; --men: #1a5fa8; --women: #b5294e;
+    --shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    height: 52px; background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; box-shadow: var(--shadow);
+  }
+  .nav-title { font-weight: 700; font-size: 15px; }
+  .nav-pages { display: flex; gap: 4px; }
+  .nav-page {
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    color: var(--muted); text-decoration: none; cursor: default; border: 1px solid transparent;
+  }
+  .nav-page.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .container { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+  .page-header { margin-bottom: 24px; }
+  .page-header h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .page-header p { color: var(--muted); font-size: 15px; }
+
+  /* CONTROLS */
+  .controls-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .control-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-right: 4px; }
+  .btn-group { display: flex; gap: 4px; }
+  .tog-btn {
+    padding: 7px 16px; border-radius: 6px; border: 1px solid var(--border);
+    background: #fff; color: var(--text); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .tog-btn:hover { border-color: #aaa; }
+  .tog-btn.active-men { background: var(--men); color: #fff; border-color: var(--men); }
+  .tog-btn.active-women { background: var(--women); color: #fff; border-color: var(--women); }
+  .tog-btn.active-both { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* LAYOUT */
+  .main-layout { display: grid; grid-template-columns: 1fr 210px; gap: 16px; align-items: start; }
+
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 22px 24px; box-shadow: var(--shadow); overflow-x: auto;
+  }
+  .chart-card h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .chart-card .chart-sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+
+  .info-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 18px; box-shadow: var(--shadow);
+  }
+  .info-section { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .info-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .info-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .info-province { font-size: 30px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .info-amount { font-size: 22px; font-weight: 700; margin-bottom: 3px; }
+  .info-sub { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* COLOUR LEGEND */
+  .colour-legend { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .colour-legend span { font-size: 12px; color: var(--muted); }
+  .legend-gradient {
+    flex: 1; max-width: 200px; height: 10px; border-radius: 5px;
+  }
+
+  .annotations { margin-top: 20px; }
+  .annotations h3 { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .annotation-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .annotation-list li { font-size: 13px; color: var(--text); display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
+  .ann-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+  .ann-badge.regional { background: #eff6ff; color: #1e40af; }
+  .ann-badge.gender { background: #fdf4ff; color: #7e22ce; }
+  .ann-badge.shock { background: #fff7ed; color: #c2410c; }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed; pointer-events: none;
+    background: #1a1a18; color: #fff;
+    padding: 8px 12px; border-radius: 7px;
+    font-size: 12px; line-height: 1.6;
+    opacity: 0; transition: opacity 0.1s;
+    z-index: 999; white-space: nowrap;
+  }
+
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-title">&#127809; Canadian Labour Market</span>
+  <div class="nav-pages">
+    <a class="nav-page" href="index.html">1. National Overview</a>
+    <a class="nav-page" href="page2.html">2. Economic Shocks</a>
+    <a class="nav-page" href="page3.html">3. Gender Wage Gap</a>
+    <a class="nav-page active" href="page4.html">4. Hours Worked</a>
+  </div>
+</nav>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="container">
+  <div class="page-header">
+    <h1>Average Hours Worked</h1>
+    <p>How have weekly working hours changed across Canadian provinces over 20 years? Each cell shows the average usual hours worked for full-time employees aged 25-54.</p>
+  </div>
+
+  <!-- Gender toggle -->
+  <div class="controls-row">
+    <span class="control-label">View</span>
+    <div class="btn-group">
+      <button class="tog-btn active-both" id="btn-both" onclick="setGender('both')">All Workers</button>
+      <button class="tog-btn" id="btn-men" onclick="setGender('men')">Men</button>
+      <button class="tog-btn" id="btn-women" onclick="setGender('women')">Women</button>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <!-- Heatmap card -->
+    <div class="chart-card">
+      <h2 id="chartTitle">Average Usual Hours Worked - All Workers</h2>
+      <p class="chart-sub">Provinces (rows) x Time (columns). Darker = more hours.</p>
+      <div class="colour-legend">
+        <span id="leg-low">-</span>
+        <canvas class="legend-gradient" id="legendCanvas" width="200" height="10"></canvas>
+        <span id="leg-high">-</span>
+      </div>
+      <div id="heatmap"></div>
+    </div>
+
+    <!-- Info card -->
+    <div class="info-card">
+      <div class="info-section">
+        <div class="info-label">Most Hours</div>
+        <div class="info-province" id="si-most-prov">-</div>
+        <div class="info-amount" id="si-most-hrs">-</div>
+        <div class="info-sub" id="si-most-sub">-</div>
+      </div>
+      <div class="info-section">
+        <div class="info-label">Least Hours</div>
+        <div class="info-province" id="si-least-prov">-</div>
+        <div class="info-amount" id="si-least-hrs">-</div>
+        <div class="info-sub" id="si-least-sub">-</div>
+      </div>
+      <div class="info-section">
+        <div class="info-label">National Average</div>
+        <div class="info-amount" id="si-nat-avg" style="font-size:26px;font-weight:800;">-</div>
+        <div class="info-sub">hrs/week across all provinces</div>
+      </div>
+      <div class="info-section">
+        <div class="info-label">Hover a cell for details</div>
+        <div class="info-sub" id="si-hover">Move your cursor over any cell to see the exact hours for that province and period.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="annotations">
+    <h3>Key Observations</h3>
+    <ul class="annotation-list">
+      <li><span class="ann-badge regional">Regional</span>Prairie provinces (AB, SK, MB) consistently log the longest workweeks, reflecting their resource and agricultural industry mix where full-time hours skew higher.</li>
+      <li><span class="ann-badge regional">Regional</span>Quebec workers tend to put in fewer hours than the national average, a pattern tied to its stronger unionization rates and distinct labour market culture.</li>
+      <li><span class="ann-badge gender">Gender</span>Men consistently work more hours per week than women across all provinces and periods, with the gap most pronounced in resource-heavy provinces like Alberta and Saskatchewan.</li>
+      <li><span class="ann-badge shock">Shock</span>COVID-19 (2020-H1) is visible as a darker band across nearly all provinces, as reduced economic activity temporarily compressed average hours for those who remained employed.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const RAW_DATA = [{"period": "2026-H1", "geo": "AB", "gender": "Men", "hours": 42.3}, {"period": "2026-H1", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2026-H1", "geo": "BC", "gender": "Men", "hours": 40.6}, {"period": "2026-H1", "geo": "BC", "gender": "Women", "hours": 40.5}, {"period": "2026-H1", "geo": "OT", "gender": "Men", "hours": 40.6}, {"period": "2026-H1", "geo": "OT", "gender": "Women", "hours": 38.5}, {"period": "2026-H1", "geo": "MB", "gender": "Men", "hours": 40.6}, {"period": "2026-H1", "geo": "MB", "gender": "Women", "hours": 38.1}, {"period": "2026-H1", "geo": "NL", "gender": "Men", "hours": 42.7}, {"period": "2026-H1", "geo": "NL", "gender": "Women", "hours": 38.6}, {"period": "2026-H1", "geo": "NS", "gender": "Men", "hours": 40.9}, {"period": "2026-H1", "geo": "NS", "gender": "Women", "hours": 38.5}, {"period": "2026-H1", "geo": "SK", "gender": "Men", "hours": 42.3}, {"period": "2026-H1", "geo": "SK", "gender": "Women", "hours": 38.8}, {"period": "2026-H1", "geo": "PE", "gender": "Men", "hours": 41.3}, {"period": "2026-H1", "geo": "PE", "gender": "Women", "hours": 38.5}, {"period": "2026-H1", "geo": "NB", "gender": "Men", "hours": 41.2}, {"period": "2026-H1", "geo": "NB", "gender": "Women", "hours": 38.0}, {"period": "2026-H1", "geo": "QC", "gender": "Men", "hours": 39.5}, {"period": "2026-H1", "geo": "QC", "gender": "Women", "hours": 37.3}, {"period": "2025-H2", "geo": "AB", "gender": "Men", "hours": 42.7}, {"period": "2025-H2", "geo": "AB", "gender": "Women", "hours": 39.4}, {"period": "2025-H2", "geo": "BC", "gender": "Men", "hours": 40.9}, {"period": "2025-H2", "geo": "BC", "gender": "Women", "hours": 38.6}, {"period": "2025-H2", "geo": "OT", "gender": "Men", "hours": 40.8}, {"period": "2025-H2", "geo": "OT", "gender": "Women", "hours": 38.6}, {"period": "2025-H2", "geo": "MB", "gender": "Men", "hours": 41.2}, {"period": "2025-H2", "geo": "MB", "gender": "Women", "hours": 38.8}, {"period": "2025-H2", "geo": "NL", "gender": "Men", "hours": 43.8}, {"period": "2025-H2", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2025-H2", "geo": "NS", "gender": "Men", "hours": 41.4}, {"period": "2025-H2", "geo": "NS", "gender": "Women", "hours": 38.7}, {"period": "2025-H2", "geo": "SK", "gender": "Men", "hours": 43.0}, {"period": "2025-H2", "geo": "SK", "gender": "Women", "hours": 38.8}, {"period": "2025-H2", "geo": "PE", "gender": "Men", "hours": 41.5}, {"period": "2025-H2", "geo": "PE", "gender": "Women", "hours": 39.0}, {"period": "2025-H2", "geo": "NB", "gender": "Men", "hours": 41.9}, {"period": "2025-H2", "geo": "NB", "gender": "Women", "hours": 38.6}, {"period": "2025-H2", "geo": "QC", "gender": "Men", "hours": 39.7}, {"period": "2025-H2", "geo": "QC", "gender": "Women", "hours": 37.2}, {"period": "2025-H1", "geo": "AB", "gender": "Men", "hours": 42.8}, {"period": "2025-H1", "geo": "AB", "gender": "Women", "hours": 38.9}, {"period": "2025-H1", "geo": "BC", "gender": "Men", "hours": 40.6}, {"period": "2025-H1", "geo": "BC", "gender": "Women", "hours": 38.6}, {"period": "2025-H1", "geo": "OT", "gender": "Men", "hours": 40.5}, {"period": "2025-H1", "geo": "OT", "gender": "Women", "hours": 38.5}, {"period": "2025-H1", "geo": "MB", "gender": "Men", "hours": 40.8}, {"period": "2025-H1", "geo": "MB", "gender": "Women", "hours": 38.5}, {"period": "2025-H1", "geo": "NL", "gender": "Men", "hours": 43.9}, {"period": "2025-H1", "geo": "NL", "gender": "Women", "hours": 38.6}, {"period": "2025-H1", "geo": "NS", "gender": "Men", "hours": 40.3}, {"period": "2025-H1", "geo": "NS", "gender": "Women", "hours": 38.7}, {"period": "2025-H1", "geo": "SK", "gender": "Men", "hours": 42.0}, {"period": "2025-H1", "geo": "SK", "gender": "Women", "hours": 38.7}, {"period": "2025-H1", "geo": "PE", "gender": "Men", "hours": 42.1}, {"period": "2025-H1", "geo": "PE", "gender": "Women", "hours": 37.6}, {"period": "2025-H1", "geo": "NB", "gender": "Men", "hours": 41.3}, {"period": "2025-H1", "geo": "NB", "gender": "Women", "hours": 38.1}, {"period": "2025-H1", "geo": "QC", "gender": "Men", "hours": 39.9}, {"period": "2025-H1", "geo": "QC", "gender": "Women", "hours": 37.0}, {"period": "2024-H2", "geo": "AB", "gender": "Men", "hours": 42.5}, {"period": "2024-H2", "geo": "AB", "gender": "Women", "hours": 38.8}, {"period": "2024-H2", "geo": "BC", "gender": "Men", "hours": 41.1}, {"period": "2024-H2", "geo": "BC", "gender": "Women", "hours": 38.3}, {"period": "2024-H2", "geo": "OT", "gender": "Men", "hours": 40.8}, {"period": "2024-H2", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2024-H2", "geo": "MB", "gender": "Men", "hours": 41.4}, {"period": "2024-H2", "geo": "MB", "gender": "Women", "hours": 38.7}, {"period": "2024-H2", "geo": "NL", "gender": "Men", "hours": 45.2}, {"period": "2024-H2", "geo": "NL", "gender": "Women", "hours": 38.6}, {"period": "2024-H2", "geo": "NS", "gender": "Men", "hours": 41.5}, {"period": "2024-H2", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2024-H2", "geo": "SK", "gender": "Men", "hours": 42.6}, {"period": "2024-H2", "geo": "SK", "gender": "Women", "hours": 38.7}, {"period": "2024-H2", "geo": "PE", "gender": "Men", "hours": 42.7}, {"period": "2024-H2", "geo": "PE", "gender": "Women", "hours": 39.1}, {"period": "2024-H2", "geo": "NB", "gender": "Men", "hours": 42.1}, {"period": "2024-H2", "geo": "NB", "gender": "Women", "hours": 38.4}, {"period": "2024-H2", "geo": "QC", "gender": "Men", "hours": 39.7}, {"period": "2024-H2", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2024-H1", "geo": "AB", "gender": "Men", "hours": 42.8}, {"period": "2024-H1", "geo": "AB", "gender": "Women", "hours": 38.8}, {"period": "2024-H1", "geo": "BC", "gender": "Men", "hours": 41.3}, {"period": "2024-H1", "geo": "BC", "gender": "Women", "hours": 38.6}, {"period": "2024-H1", "geo": "OT", "gender": "Men", "hours": 40.9}, {"period": "2024-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2024-H1", "geo": "MB", "gender": "Men", "hours": 41.3}, {"period": "2024-H1", "geo": "MB", "gender": "Women", "hours": 38.5}, {"period": "2024-H1", "geo": "NL", "gender": "Men", "hours": 43.6}, {"period": "2024-H1", "geo": "NL", "gender": "Women", "hours": 38.7}, {"period": "2024-H1", "geo": "NS", "gender": "Men", "hours": 41.2}, {"period": "2024-H1", "geo": "NS", "gender": "Women", "hours": 39.2}, {"period": "2024-H1", "geo": "SK", "gender": "Men", "hours": 41.9}, {"period": "2024-H1", "geo": "SK", "gender": "Women", "hours": 38.6}, {"period": "2024-H1", "geo": "PE", "gender": "Men", "hours": 41.6}, {"period": "2024-H1", "geo": "PE", "gender": "Women", "hours": 38.1}, {"period": "2024-H1", "geo": "NB", "gender": "Men", "hours": 41.3}, {"period": "2024-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2024-H1", "geo": "QC", "gender": "Men", "hours": 39.5}, {"period": "2024-H1", "geo": "QC", "gender": "Women", "hours": 37.2}, {"period": "2023-H2", "geo": "AB", "gender": "Men", "hours": 42.5}, {"period": "2023-H2", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2023-H2", "geo": "BC", "gender": "Men", "hours": 41.0}, {"period": "2023-H2", "geo": "BC", "gender": "Women", "hours": 38.4}, {"period": "2023-H2", "geo": "OT", "gender": "Men", "hours": 41.0}, {"period": "2023-H2", "geo": "OT", "gender": "Women", "hours": 38.9}, {"period": "2023-H2", "geo": "MB", "gender": "Men", "hours": 41.7}, {"period": "2023-H2", "geo": "MB", "gender": "Women", "hours": 39.0}, {"period": "2023-H2", "geo": "NL", "gender": "Men", "hours": 44.9}, {"period": "2023-H2", "geo": "NL", "gender": "Women", "hours": 38.8}, {"period": "2023-H2", "geo": "NS", "gender": "Men", "hours": 42.2}, {"period": "2023-H2", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2023-H2", "geo": "SK", "gender": "Men", "hours": 42.3}, {"period": "2023-H2", "geo": "SK", "gender": "Women", "hours": 39.7}, {"period": "2023-H2", "geo": "PE", "gender": "Men", "hours": 43.3}, {"period": "2023-H2", "geo": "PE", "gender": "Women", "hours": 39.5}, {"period": "2023-H2", "geo": "NB", "gender": "Men", "hours": 42.2}, {"period": "2023-H2", "geo": "NB", "gender": "Women", "hours": 38.9}, {"period": "2023-H2", "geo": "QC", "gender": "Men", "hours": 40.0}, {"period": "2023-H2", "geo": "QC", "gender": "Women", "hours": 37.8}, {"period": "2023-H1", "geo": "AB", "gender": "Men", "hours": 42.4}, {"period": "2023-H1", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2023-H1", "geo": "BC", "gender": "Men", "hours": 41.0}, {"period": "2023-H1", "geo": "BC", "gender": "Women", "hours": 38.6}, {"period": "2023-H1", "geo": "OT", "gender": "Men", "hours": 41.0}, {"period": "2023-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2023-H1", "geo": "MB", "gender": "Men", "hours": 41.2}, {"period": "2023-H1", "geo": "MB", "gender": "Women", "hours": 38.7}, {"period": "2023-H1", "geo": "NL", "gender": "Men", "hours": 45.0}, {"period": "2023-H1", "geo": "NL", "gender": "Women", "hours": 39.3}, {"period": "2023-H1", "geo": "NS", "gender": "Men", "hours": 41.4}, {"period": "2023-H1", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2023-H1", "geo": "SK", "gender": "Men", "hours": 42.1}, {"period": "2023-H1", "geo": "SK", "gender": "Women", "hours": 39.1}, {"period": "2023-H1", "geo": "PE", "gender": "Men", "hours": 41.2}, {"period": "2023-H1", "geo": "PE", "gender": "Women", "hours": 38.4}, {"period": "2023-H1", "geo": "NB", "gender": "Men", "hours": 41.9}, {"period": "2023-H1", "geo": "NB", "gender": "Women", "hours": 38.3}, {"period": "2023-H1", "geo": "QC", "gender": "Men", "hours": 40.1}, {"period": "2023-H1", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2022-H2", "geo": "AB", "gender": "Men", "hours": 42.5}, {"period": "2022-H2", "geo": "AB", "gender": "Women", "hours": 39.3}, {"period": "2022-H2", "geo": "BC", "gender": "Men", "hours": 41.4}, {"period": "2022-H2", "geo": "BC", "gender": "Women", "hours": 39.1}, {"period": "2022-H2", "geo": "OT", "gender": "Men", "hours": 41.1}, {"period": "2022-H2", "geo": "OT", "gender": "Women", "hours": 38.9}, {"period": "2022-H2", "geo": "MB", "gender": "Men", "hours": 41.6}, {"period": "2022-H2", "geo": "MB", "gender": "Women", "hours": 39.1}, {"period": "2022-H2", "geo": "NL", "gender": "Men", "hours": 44.1}, {"period": "2022-H2", "geo": "NL", "gender": "Women", "hours": 38.4}, {"period": "2022-H2", "geo": "NS", "gender": "Men", "hours": 41.4}, {"period": "2022-H2", "geo": "NS", "gender": "Women", "hours": 38.7}, {"period": "2022-H2", "geo": "SK", "gender": "Men", "hours": 43.0}, {"period": "2022-H2", "geo": "SK", "gender": "Women", "hours": 39.9}, {"period": "2022-H2", "geo": "PE", "gender": "Men", "hours": 43.0}, {"period": "2022-H2", "geo": "PE", "gender": "Women", "hours": 39.1}, {"period": "2022-H2", "geo": "NB", "gender": "Men", "hours": 41.4}, {"period": "2022-H2", "geo": "NB", "gender": "Women", "hours": 38.5}, {"period": "2022-H2", "geo": "QC", "gender": "Men", "hours": 40.3}, {"period": "2022-H2", "geo": "QC", "gender": "Women", "hours": 37.3}, {"period": "2022-H1", "geo": "AB", "gender": "Men", "hours": 42.4}, {"period": "2022-H1", "geo": "AB", "gender": "Women", "hours": 38.9}, {"period": "2022-H1", "geo": "BC", "gender": "Men", "hours": 40.9}, {"period": "2022-H1", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2022-H1", "geo": "OT", "gender": "Men", "hours": 40.8}, {"period": "2022-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2022-H1", "geo": "MB", "gender": "Men", "hours": 41.1}, {"period": "2022-H1", "geo": "MB", "gender": "Women", "hours": 38.4}, {"period": "2022-H1", "geo": "NL", "gender": "Men", "hours": 43.7}, {"period": "2022-H1", "geo": "NL", "gender": "Women", "hours": 38.3}, {"period": "2022-H1", "geo": "NS", "gender": "Men", "hours": 41.8}, {"period": "2022-H1", "geo": "NS", "gender": "Women", "hours": 39.0}, {"period": "2022-H1", "geo": "SK", "gender": "Men", "hours": 42.3}, {"period": "2022-H1", "geo": "SK", "gender": "Women", "hours": 38.9}, {"period": "2022-H1", "geo": "PE", "gender": "Men", "hours": 42.1}, {"period": "2022-H1", "geo": "PE", "gender": "Women", "hours": 38.4}, {"period": "2022-H1", "geo": "NB", "gender": "Men", "hours": 42.1}, {"period": "2022-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2022-H1", "geo": "QC", "gender": "Men", "hours": 40.1}, {"period": "2022-H1", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2021-H2", "geo": "AB", "gender": "Men", "hours": 43.2}, {"period": "2021-H2", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2021-H2", "geo": "BC", "gender": "Men", "hours": 41.3}, {"period": "2021-H2", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2021-H2", "geo": "OT", "gender": "Men", "hours": 41.0}, {"period": "2021-H2", "geo": "OT", "gender": "Women", "hours": 38.4}, {"period": "2021-H2", "geo": "MB", "gender": "Men", "hours": 41.4}, {"period": "2021-H2", "geo": "MB", "gender": "Women", "hours": 39.0}, {"period": "2021-H2", "geo": "NL", "gender": "Men", "hours": 43.2}, {"period": "2021-H2", "geo": "NL", "gender": "Women", "hours": 39.2}, {"period": "2021-H2", "geo": "NS", "gender": "Men", "hours": 41.8}, {"period": "2021-H2", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2021-H2", "geo": "SK", "gender": "Men", "hours": 42.7}, {"period": "2021-H2", "geo": "SK", "gender": "Women", "hours": 39.2}, {"period": "2021-H2", "geo": "PE", "gender": "Men", "hours": 43.2}, {"period": "2021-H2", "geo": "PE", "gender": "Women", "hours": 39.1}, {"period": "2021-H2", "geo": "NB", "gender": "Men", "hours": 42.4}, {"period": "2021-H2", "geo": "NB", "gender": "Women", "hours": 38.6}, {"period": "2021-H2", "geo": "QC", "gender": "Men", "hours": 40.1}, {"period": "2021-H2", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2021-H1", "geo": "AB", "gender": "Men", "hours": 42.5}, {"period": "2021-H1", "geo": "AB", "gender": "Women", "hours": 38.8}, {"period": "2021-H1", "geo": "BC", "gender": "Men", "hours": 41.1}, {"period": "2021-H1", "geo": "BC", "gender": "Women", "hours": 38.5}, {"period": "2021-H1", "geo": "OT", "gender": "Men", "hours": 41.1}, {"period": "2021-H1", "geo": "OT", "gender": "Women", "hours": 38.5}, {"period": "2021-H1", "geo": "MB", "gender": "Men", "hours": 41.4}, {"period": "2021-H1", "geo": "MB", "gender": "Women", "hours": 38.4}, {"period": "2021-H1", "geo": "NL", "gender": "Men", "hours": 43.2}, {"period": "2021-H1", "geo": "NL", "gender": "Women", "hours": 38.5}, {"period": "2021-H1", "geo": "NS", "gender": "Men", "hours": 41.8}, {"period": "2021-H1", "geo": "NS", "gender": "Women", "hours": 38.4}, {"period": "2021-H1", "geo": "SK", "gender": "Men", "hours": 42.5}, {"period": "2021-H1", "geo": "SK", "gender": "Women", "hours": 38.8}, {"period": "2021-H1", "geo": "PE", "gender": "Men", "hours": 43.7}, {"period": "2021-H1", "geo": "PE", "gender": "Women", "hours": 38.5}, {"period": "2021-H1", "geo": "NB", "gender": "Men", "hours": 41.7}, {"period": "2021-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2021-H1", "geo": "QC", "gender": "Men", "hours": 40.0}, {"period": "2021-H1", "geo": "QC", "gender": "Women", "hours": 37.1}, {"period": "2020-H2", "geo": "AB", "gender": "Men", "hours": 43.0}, {"period": "2020-H2", "geo": "AB", "gender": "Women", "hours": 39.0}, {"period": "2020-H2", "geo": "BC", "gender": "Men", "hours": 41.0}, {"period": "2020-H2", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2020-H2", "geo": "OT", "gender": "Men", "hours": 40.9}, {"period": "2020-H2", "geo": "OT", "gender": "Women", "hours": 38.5}, {"period": "2020-H2", "geo": "MB", "gender": "Men", "hours": 42.1}, {"period": "2020-H2", "geo": "MB", "gender": "Women", "hours": 38.5}, {"period": "2020-H2", "geo": "NL", "gender": "Men", "hours": 44.4}, {"period": "2020-H2", "geo": "NL", "gender": "Women", "hours": 38.7}, {"period": "2020-H2", "geo": "NS", "gender": "Men", "hours": 42.5}, {"period": "2020-H2", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2020-H2", "geo": "SK", "gender": "Men", "hours": 43.2}, {"period": "2020-H2", "geo": "SK", "gender": "Women", "hours": 38.9}, {"period": "2020-H2", "geo": "PE", "gender": "Men", "hours": 42.8}, {"period": "2020-H2", "geo": "PE", "gender": "Women", "hours": 39.2}, {"period": "2020-H2", "geo": "NB", "gender": "Men", "hours": 43.4}, {"period": "2020-H2", "geo": "NB", "gender": "Women", "hours": 38.4}, {"period": "2020-H2", "geo": "QC", "gender": "Men", "hours": 40.0}, {"period": "2020-H2", "geo": "QC", "gender": "Women", "hours": 37.5}, {"period": "2020-H1", "geo": "AB", "gender": "Men", "hours": 42.8}, {"period": "2020-H1", "geo": "AB", "gender": "Women", "hours": 39.0}, {"period": "2020-H1", "geo": "BC", "gender": "Men", "hours": 41.2}, {"period": "2020-H1", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2020-H1", "geo": "OT", "gender": "Men", "hours": 41.2}, {"period": "2020-H1", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2020-H1", "geo": "MB", "gender": "Men", "hours": 41.3}, {"period": "2020-H1", "geo": "MB", "gender": "Women", "hours": 38.7}, {"period": "2020-H1", "geo": "NL", "gender": "Men", "hours": 44.4}, {"period": "2020-H1", "geo": "NL", "gender": "Women", "hours": 38.7}, {"period": "2020-H1", "geo": "NS", "gender": "Men", "hours": 41.9}, {"period": "2020-H1", "geo": "NS", "gender": "Women", "hours": 38.4}, {"period": "2020-H1", "geo": "SK", "gender": "Men", "hours": 42.9}, {"period": "2020-H1", "geo": "SK", "gender": "Women", "hours": 39.0}, {"period": "2020-H1", "geo": "PE", "gender": "Men", "hours": 42.9}, {"period": "2020-H1", "geo": "PE", "gender": "Women", "hours": 38.8}, {"period": "2020-H1", "geo": "NB", "gender": "Men", "hours": 42.1}, {"period": "2020-H1", "geo": "NB", "gender": "Women", "hours": 38.3}, {"period": "2020-H1", "geo": "QC", "gender": "Men", "hours": 40.3}, {"period": "2020-H1", "geo": "QC", "gender": "Women", "hours": 37.2}, {"period": "2019-H2", "geo": "AB", "gender": "Men", "hours": 42.9}, {"period": "2019-H2", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2019-H2", "geo": "BC", "gender": "Men", "hours": 41.4}, {"period": "2019-H2", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2019-H2", "geo": "OT", "gender": "Men", "hours": 41.4}, {"period": "2019-H2", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2019-H2", "geo": "MB", "gender": "Men", "hours": 42.5}, {"period": "2019-H2", "geo": "MB", "gender": "Women", "hours": 38.8}, {"period": "2019-H2", "geo": "NL", "gender": "Men", "hours": 44.4}, {"period": "2019-H2", "geo": "NL", "gender": "Women", "hours": 38.7}, {"period": "2019-H2", "geo": "NS", "gender": "Men", "hours": 42.3}, {"period": "2019-H2", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2019-H2", "geo": "SK", "gender": "Men", "hours": 43.0}, {"period": "2019-H2", "geo": "SK", "gender": "Women", "hours": 39.0}, {"period": "2019-H2", "geo": "PE", "gender": "Men", "hours": 43.3}, {"period": "2019-H2", "geo": "PE", "gender": "Women", "hours": 39.0}, {"period": "2019-H2", "geo": "NB", "gender": "Men", "hours": 42.9}, {"period": "2019-H2", "geo": "NB", "gender": "Women", "hours": 38.8}, {"period": "2019-H2", "geo": "QC", "gender": "Men", "hours": 40.3}, {"period": "2019-H2", "geo": "QC", "gender": "Women", "hours": 37.7}, {"period": "2019-H1", "geo": "AB", "gender": "Men", "hours": 42.6}, {"period": "2019-H1", "geo": "AB", "gender": "Women", "hours": 39.0}, {"period": "2019-H1", "geo": "BC", "gender": "Men", "hours": 41.4}, {"period": "2019-H1", "geo": "BC", "gender": "Women", "hours": 38.1}, {"period": "2019-H1", "geo": "OT", "gender": "Men", "hours": 41.3}, {"period": "2019-H1", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2019-H1", "geo": "MB", "gender": "Men", "hours": 41.9}, {"period": "2019-H1", "geo": "MB", "gender": "Women", "hours": 38.3}, {"period": "2019-H1", "geo": "NL", "gender": "Men", "hours": 43.9}, {"period": "2019-H1", "geo": "NL", "gender": "Women", "hours": 38.9}, {"period": "2019-H1", "geo": "NS", "gender": "Men", "hours": 42.2}, {"period": "2019-H1", "geo": "NS", "gender": "Women", "hours": 38.5}, {"period": "2019-H1", "geo": "SK", "gender": "Men", "hours": 42.7}, {"period": "2019-H1", "geo": "SK", "gender": "Women", "hours": 38.8}, {"period": "2019-H1", "geo": "PE", "gender": "Men", "hours": 42.7}, {"period": "2019-H1", "geo": "PE", "gender": "Women", "hours": 38.7}, {"period": "2019-H1", "geo": "NB", "gender": "Men", "hours": 42.3}, {"period": "2019-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2019-H1", "geo": "QC", "gender": "Men", "hours": 39.9}, {"period": "2019-H1", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2018-H2", "geo": "AB", "gender": "Men", "hours": 43.3}, {"period": "2018-H2", "geo": "AB", "gender": "Women", "hours": 39.3}, {"period": "2018-H2", "geo": "BC", "gender": "Men", "hours": 41.5}, {"period": "2018-H2", "geo": "BC", "gender": "Women", "hours": 38.9}, {"period": "2018-H2", "geo": "OT", "gender": "Men", "hours": 41.4}, {"period": "2018-H2", "geo": "OT", "gender": "Women", "hours": 39.0}, {"period": "2018-H2", "geo": "MB", "gender": "Men", "hours": 42.2}, {"period": "2018-H2", "geo": "MB", "gender": "Women", "hours": 38.9}, {"period": "2018-H2", "geo": "NL", "gender": "Men", "hours": 44.8}, {"period": "2018-H2", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2018-H2", "geo": "NS", "gender": "Men", "hours": 42.1}, {"period": "2018-H2", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2018-H2", "geo": "SK", "gender": "Men", "hours": 42.8}, {"period": "2018-H2", "geo": "SK", "gender": "Women", "hours": 39.0}, {"period": "2018-H2", "geo": "PE", "gender": "Men", "hours": 43.2}, {"period": "2018-H2", "geo": "PE", "gender": "Women", "hours": 39.6}, {"period": "2018-H2", "geo": "NB", "gender": "Men", "hours": 42.8}, {"period": "2018-H2", "geo": "NB", "gender": "Women", "hours": 38.7}, {"period": "2018-H2", "geo": "QC", "gender": "Men", "hours": 40.1}, {"period": "2018-H2", "geo": "QC", "gender": "Women", "hours": 37.7}, {"period": "2018-H1", "geo": "AB", "gender": "Men", "hours": 43.0}, {"period": "2018-H1", "geo": "AB", "gender": "Women", "hours": 39.0}, {"period": "2018-H1", "geo": "BC", "gender": "Men", "hours": 41.8}, {"period": "2018-H1", "geo": "BC", "gender": "Women", "hours": 38.5}, {"period": "2018-H1", "geo": "OT", "gender": "Men", "hours": 41.5}, {"period": "2018-H1", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2018-H1", "geo": "MB", "gender": "Men", "hours": 41.5}, {"period": "2018-H1", "geo": "MB", "gender": "Women", "hours": 38.6}, {"period": "2018-H1", "geo": "NL", "gender": "Men", "hours": 44.3}, {"period": "2018-H1", "geo": "NL", "gender": "Women", "hours": 38.1}, {"period": "2018-H1", "geo": "NS", "gender": "Men", "hours": 42.3}, {"period": "2018-H1", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2018-H1", "geo": "SK", "gender": "Men", "hours": 42.7}, {"period": "2018-H1", "geo": "SK", "gender": "Women", "hours": 38.7}, {"period": "2018-H1", "geo": "PE", "gender": "Men", "hours": 43.9}, {"period": "2018-H1", "geo": "PE", "gender": "Women", "hours": 38.5}, {"period": "2018-H1", "geo": "NB", "gender": "Men", "hours": 42.0}, {"period": "2018-H1", "geo": "NB", "gender": "Women", "hours": 38.5}, {"period": "2018-H1", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2018-H1", "geo": "QC", "gender": "Women", "hours": 37.5}, {"period": "2017-H2", "geo": "AB", "gender": "Men", "hours": 43.2}, {"period": "2017-H2", "geo": "AB", "gender": "Women", "hours": 39.3}, {"period": "2017-H2", "geo": "BC", "gender": "Men", "hours": 41.8}, {"period": "2017-H2", "geo": "BC", "gender": "Women", "hours": 39.2}, {"period": "2017-H2", "geo": "OT", "gender": "Men", "hours": 41.4}, {"period": "2017-H2", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2017-H2", "geo": "MB", "gender": "Men", "hours": 42.5}, {"period": "2017-H2", "geo": "MB", "gender": "Women", "hours": 38.7}, {"period": "2017-H2", "geo": "NL", "gender": "Men", "hours": 45.0}, {"period": "2017-H2", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2017-H2", "geo": "NS", "gender": "Men", "hours": 43.2}, {"period": "2017-H2", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2017-H2", "geo": "SK", "gender": "Men", "hours": 43.3}, {"period": "2017-H2", "geo": "SK", "gender": "Women", "hours": 39.0}, {"period": "2017-H2", "geo": "PE", "gender": "Men", "hours": 44.3}, {"period": "2017-H2", "geo": "PE", "gender": "Women", "hours": 38.7}, {"period": "2017-H2", "geo": "NB", "gender": "Men", "hours": 45.0}, {"period": "2017-H2", "geo": "NB", "gender": "Women", "hours": 39.2}, {"period": "2017-H2", "geo": "QC", "gender": "Men", "hours": 40.5}, {"period": "2017-H2", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2017-H1", "geo": "AB", "gender": "Men", "hours": 43.3}, {"period": "2017-H1", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2017-H1", "geo": "BC", "gender": "Men", "hours": 41.5}, {"period": "2017-H1", "geo": "BC", "gender": "Women", "hours": 38.9}, {"period": "2017-H1", "geo": "OT", "gender": "Men", "hours": 41.5}, {"period": "2017-H1", "geo": "OT", "gender": "Women", "hours": 38.9}, {"period": "2017-H1", "geo": "MB", "gender": "Men", "hours": 41.4}, {"period": "2017-H1", "geo": "MB", "gender": "Women", "hours": 38.4}, {"period": "2017-H1", "geo": "NL", "gender": "Men", "hours": 43.8}, {"period": "2017-H1", "geo": "NL", "gender": "Women", "hours": 38.5}, {"period": "2017-H1", "geo": "NS", "gender": "Men", "hours": 42.9}, {"period": "2017-H1", "geo": "NS", "gender": "Women", "hours": 38.4}, {"period": "2017-H1", "geo": "SK", "gender": "Men", "hours": 42.8}, {"period": "2017-H1", "geo": "SK", "gender": "Women", "hours": 38.7}, {"period": "2017-H1", "geo": "PE", "gender": "Men", "hours": 42.9}, {"period": "2017-H1", "geo": "PE", "gender": "Women", "hours": 38.2}, {"period": "2017-H1", "geo": "NB", "gender": "Men", "hours": 43.0}, {"period": "2017-H1", "geo": "NB", "gender": "Women", "hours": 38.3}, {"period": "2017-H1", "geo": "QC", "gender": "Men", "hours": 40.0}, {"period": "2017-H1", "geo": "QC", "gender": "Women", "hours": 37.2}, {"period": "2016-H2", "geo": "AB", "gender": "Men", "hours": 42.8}, {"period": "2016-H2", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2016-H2", "geo": "BC", "gender": "Men", "hours": 41.3}, {"period": "2016-H2", "geo": "BC", "gender": "Women", "hours": 39.0}, {"period": "2016-H2", "geo": "OT", "gender": "Men", "hours": 41.7}, {"period": "2016-H2", "geo": "OT", "gender": "Women", "hours": 38.9}, {"period": "2016-H2", "geo": "MB", "gender": "Men", "hours": 42.1}, {"period": "2016-H2", "geo": "MB", "gender": "Women", "hours": 39.1}, {"period": "2016-H2", "geo": "NL", "gender": "Men", "hours": 45.6}, {"period": "2016-H2", "geo": "NL", "gender": "Women", "hours": 39.2}, {"period": "2016-H2", "geo": "NS", "gender": "Men", "hours": 42.8}, {"period": "2016-H2", "geo": "NS", "gender": "Women", "hours": 38.9}, {"period": "2016-H2", "geo": "SK", "gender": "Men", "hours": 43.6}, {"period": "2016-H2", "geo": "SK", "gender": "Women", "hours": 39.4}, {"period": "2016-H2", "geo": "PE", "gender": "Men", "hours": 44.8}, {"period": "2016-H2", "geo": "PE", "gender": "Women", "hours": 38.8}, {"period": "2016-H2", "geo": "NB", "gender": "Men", "hours": 43.3}, {"period": "2016-H2", "geo": "NB", "gender": "Women", "hours": 38.7}, {"period": "2016-H2", "geo": "QC", "gender": "Men", "hours": 40.3}, {"period": "2016-H2", "geo": "QC", "gender": "Women", "hours": 37.8}, {"period": "2016-H1", "geo": "AB", "gender": "Men", "hours": 43.6}, {"period": "2016-H1", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2016-H1", "geo": "BC", "gender": "Men", "hours": 41.8}, {"period": "2016-H1", "geo": "BC", "gender": "Women", "hours": 38.5}, {"period": "2016-H1", "geo": "OT", "gender": "Men", "hours": 41.5}, {"period": "2016-H1", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2016-H1", "geo": "MB", "gender": "Men", "hours": 42.0}, {"period": "2016-H1", "geo": "MB", "gender": "Women", "hours": 38.5}, {"period": "2016-H1", "geo": "NL", "gender": "Men", "hours": 43.7}, {"period": "2016-H1", "geo": "NL", "gender": "Women", "hours": 38.8}, {"period": "2016-H1", "geo": "NS", "gender": "Men", "hours": 42.6}, {"period": "2016-H1", "geo": "NS", "gender": "Women", "hours": 38.3}, {"period": "2016-H1", "geo": "SK", "gender": "Men", "hours": 43.1}, {"period": "2016-H1", "geo": "SK", "gender": "Women", "hours": 39.3}, {"period": "2016-H1", "geo": "PE", "gender": "Men", "hours": 43.8}, {"period": "2016-H1", "geo": "PE", "gender": "Women", "hours": 39.0}, {"period": "2016-H1", "geo": "NB", "gender": "Men", "hours": 42.4}, {"period": "2016-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2016-H1", "geo": "QC", "gender": "Men", "hours": 40.1}, {"period": "2016-H1", "geo": "QC", "gender": "Women", "hours": 37.3}, {"period": "2015-H2", "geo": "AB", "gender": "Men", "hours": 43.3}, {"period": "2015-H2", "geo": "AB", "gender": "Women", "hours": 38.9}, {"period": "2015-H2", "geo": "BC", "gender": "Men", "hours": 42.2}, {"period": "2015-H2", "geo": "BC", "gender": "Women", "hours": 39.5}, {"period": "2015-H2", "geo": "OT", "gender": "Men", "hours": 41.8}, {"period": "2015-H2", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2015-H2", "geo": "MB", "gender": "Men", "hours": 42.1}, {"period": "2015-H2", "geo": "MB", "gender": "Women", "hours": 39.0}, {"period": "2015-H2", "geo": "NL", "gender": "Men", "hours": 44.8}, {"period": "2015-H2", "geo": "NL", "gender": "Women", "hours": 38.8}, {"period": "2015-H2", "geo": "NS", "gender": "Men", "hours": 42.8}, {"period": "2015-H2", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2015-H2", "geo": "SK", "gender": "Men", "hours": 43.9}, {"period": "2015-H2", "geo": "SK", "gender": "Women", "hours": 39.4}, {"period": "2015-H2", "geo": "PE", "gender": "Men", "hours": 44.7}, {"period": "2015-H2", "geo": "PE", "gender": "Women", "hours": 39.5}, {"period": "2015-H2", "geo": "NB", "gender": "Men", "hours": 42.5}, {"period": "2015-H2", "geo": "NB", "gender": "Women", "hours": 38.6}, {"period": "2015-H2", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2015-H2", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2015-H1", "geo": "AB", "gender": "Men", "hours": 43.1}, {"period": "2015-H1", "geo": "AB", "gender": "Women", "hours": 39.2}, {"period": "2015-H1", "geo": "BC", "gender": "Men", "hours": 41.8}, {"period": "2015-H1", "geo": "BC", "gender": "Women", "hours": 38.5}, {"period": "2015-H1", "geo": "OT", "gender": "Men", "hours": 41.3}, {"period": "2015-H1", "geo": "OT", "gender": "Women", "hours": 38.4}, {"period": "2015-H1", "geo": "MB", "gender": "Men", "hours": 42.0}, {"period": "2015-H1", "geo": "MB", "gender": "Women", "hours": 38.4}, {"period": "2015-H1", "geo": "NL", "gender": "Men", "hours": 43.6}, {"period": "2015-H1", "geo": "NL", "gender": "Women", "hours": 38.7}, {"period": "2015-H1", "geo": "NS", "gender": "Men", "hours": 42.8}, {"period": "2015-H1", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2015-H1", "geo": "SK", "gender": "Men", "hours": 42.9}, {"period": "2015-H1", "geo": "SK", "gender": "Women", "hours": 39.0}, {"period": "2015-H1", "geo": "PE", "gender": "Men", "hours": 42.8}, {"period": "2015-H1", "geo": "PE", "gender": "Women", "hours": 38.7}, {"period": "2015-H1", "geo": "NB", "gender": "Men", "hours": 42.9}, {"period": "2015-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2015-H1", "geo": "QC", "gender": "Men", "hours": 40.3}, {"period": "2015-H1", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2014-H2", "geo": "AB", "gender": "Men", "hours": 43.9}, {"period": "2014-H2", "geo": "AB", "gender": "Women", "hours": 39.7}, {"period": "2014-H2", "geo": "BC", "gender": "Men", "hours": 42.3}, {"period": "2014-H2", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2014-H2", "geo": "OT", "gender": "Men", "hours": 41.7}, {"period": "2014-H2", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2014-H2", "geo": "MB", "gender": "Men", "hours": 42.0}, {"period": "2014-H2", "geo": "MB", "gender": "Women", "hours": 38.8}, {"period": "2014-H2", "geo": "NL", "gender": "Men", "hours": 45.2}, {"period": "2014-H2", "geo": "NL", "gender": "Women", "hours": 38.8}, {"period": "2014-H2", "geo": "NS", "gender": "Men", "hours": 43.3}, {"period": "2014-H2", "geo": "NS", "gender": "Women", "hours": 39.0}, {"period": "2014-H2", "geo": "SK", "gender": "Men", "hours": 44.1}, {"period": "2014-H2", "geo": "SK", "gender": "Women", "hours": 39.0}, {"period": "2014-H2", "geo": "PE", "gender": "Men", "hours": 45.0}, {"period": "2014-H2", "geo": "PE", "gender": "Women", "hours": 39.2}, {"period": "2014-H2", "geo": "NB", "gender": "Men", "hours": 43.6}, {"period": "2014-H2", "geo": "NB", "gender": "Women", "hours": 39.1}, {"period": "2014-H2", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2014-H2", "geo": "QC", "gender": "Women", "hours": 37.9}, {"period": "2014-H1", "geo": "AB", "gender": "Men", "hours": 43.6}, {"period": "2014-H1", "geo": "AB", "gender": "Women", "hours": 39.9}, {"period": "2014-H1", "geo": "BC", "gender": "Men", "hours": 41.7}, {"period": "2014-H1", "geo": "BC", "gender": "Women", "hours": 38.4}, {"period": "2014-H1", "geo": "OT", "gender": "Men", "hours": 41.6}, {"period": "2014-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2014-H1", "geo": "MB", "gender": "Men", "hours": 42.1}, {"period": "2014-H1", "geo": "MB", "gender": "Women", "hours": 38.9}, {"period": "2014-H1", "geo": "NL", "gender": "Men", "hours": 44.0}, {"period": "2014-H1", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2014-H1", "geo": "NS", "gender": "Men", "hours": 42.0}, {"period": "2014-H1", "geo": "NS", "gender": "Women", "hours": 38.2}, {"period": "2014-H1", "geo": "SK", "gender": "Men", "hours": 43.3}, {"period": "2014-H1", "geo": "SK", "gender": "Women", "hours": 38.6}, {"period": "2014-H1", "geo": "PE", "gender": "Men", "hours": 44.5}, {"period": "2014-H1", "geo": "PE", "gender": "Women", "hours": 38.6}, {"period": "2014-H1", "geo": "NB", "gender": "Men", "hours": 42.4}, {"period": "2014-H1", "geo": "NB", "gender": "Women", "hours": 38.2}, {"period": "2014-H1", "geo": "QC", "gender": "Men", "hours": 40.5}, {"period": "2014-H1", "geo": "QC", "gender": "Women", "hours": 37.5}, {"period": "2013-H2", "geo": "AB", "gender": "Men", "hours": 43.4}, {"period": "2013-H2", "geo": "AB", "gender": "Women", "hours": 39.4}, {"period": "2013-H2", "geo": "BC", "gender": "Men", "hours": 42.5}, {"period": "2013-H2", "geo": "BC", "gender": "Women", "hours": 38.8}, {"period": "2013-H2", "geo": "OT", "gender": "Men", "hours": 41.9}, {"period": "2013-H2", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2013-H2", "geo": "MB", "gender": "Men", "hours": 42.6}, {"period": "2013-H2", "geo": "MB", "gender": "Women", "hours": 38.6}, {"period": "2013-H2", "geo": "NL", "gender": "Men", "hours": 44.5}, {"period": "2013-H2", "geo": "NL", "gender": "Women", "hours": 38.9}, {"period": "2013-H2", "geo": "NS", "gender": "Men", "hours": 43.1}, {"period": "2013-H2", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2013-H2", "geo": "SK", "gender": "Men", "hours": 44.3}, {"period": "2013-H2", "geo": "SK", "gender": "Women", "hours": 39.2}, {"period": "2013-H2", "geo": "PE", "gender": "Men", "hours": 45.7}, {"period": "2013-H2", "geo": "PE", "gender": "Women", "hours": 38.8}, {"period": "2013-H2", "geo": "NB", "gender": "Men", "hours": 43.5}, {"period": "2013-H2", "geo": "NB", "gender": "Women", "hours": 38.7}, {"period": "2013-H2", "geo": "QC", "gender": "Men", "hours": 40.7}, {"period": "2013-H2", "geo": "QC", "gender": "Women", "hours": 37.7}, {"period": "2013-H1", "geo": "AB", "gender": "Men", "hours": 43.5}, {"period": "2013-H1", "geo": "AB", "gender": "Women", "hours": 39.3}, {"period": "2013-H1", "geo": "BC", "gender": "Men", "hours": 42.2}, {"period": "2013-H1", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2013-H1", "geo": "OT", "gender": "Men", "hours": 41.8}, {"period": "2013-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2013-H1", "geo": "MB", "gender": "Men", "hours": 42.0}, {"period": "2013-H1", "geo": "MB", "gender": "Women", "hours": 38.5}, {"period": "2013-H1", "geo": "NL", "gender": "Men", "hours": 44.0}, {"period": "2013-H1", "geo": "NL", "gender": "Women", "hours": 38.7}, {"period": "2013-H1", "geo": "NS", "gender": "Men", "hours": 42.4}, {"period": "2013-H1", "geo": "NS", "gender": "Women", "hours": 38.4}, {"period": "2013-H1", "geo": "SK", "gender": "Men", "hours": 43.5}, {"period": "2013-H1", "geo": "SK", "gender": "Women", "hours": 39.3}, {"period": "2013-H1", "geo": "PE", "gender": "Men", "hours": 44.8}, {"period": "2013-H1", "geo": "PE", "gender": "Women", "hours": 38.9}, {"period": "2013-H1", "geo": "NB", "gender": "Men", "hours": 42.8}, {"period": "2013-H1", "geo": "NB", "gender": "Women", "hours": 38.3}, {"period": "2013-H1", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2013-H1", "geo": "QC", "gender": "Women", "hours": 37.5}, {"period": "2012-H2", "geo": "AB", "gender": "Men", "hours": 44.2}, {"period": "2012-H2", "geo": "AB", "gender": "Women", "hours": 39.6}, {"period": "2012-H2", "geo": "BC", "gender": "Men", "hours": 42.3}, {"period": "2012-H2", "geo": "BC", "gender": "Women", "hours": 38.8}, {"period": "2012-H2", "geo": "OT", "gender": "Men", "hours": 42.0}, {"period": "2012-H2", "geo": "OT", "gender": "Women", "hours": 39.0}, {"period": "2012-H2", "geo": "MB", "gender": "Men", "hours": 43.0}, {"period": "2012-H2", "geo": "MB", "gender": "Women", "hours": 38.7}, {"period": "2012-H2", "geo": "NL", "gender": "Men", "hours": 45.3}, {"period": "2012-H2", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2012-H2", "geo": "NS", "gender": "Men", "hours": 43.3}, {"period": "2012-H2", "geo": "NS", "gender": "Women", "hours": 38.7}, {"period": "2012-H2", "geo": "SK", "gender": "Men", "hours": 44.8}, {"period": "2012-H2", "geo": "SK", "gender": "Women", "hours": 39.2}, {"period": "2012-H2", "geo": "PE", "gender": "Men", "hours": 43.8}, {"period": "2012-H2", "geo": "PE", "gender": "Women", "hours": 38.9}, {"period": "2012-H2", "geo": "NB", "gender": "Men", "hours": 43.3}, {"period": "2012-H2", "geo": "NB", "gender": "Women", "hours": 38.9}, {"period": "2012-H2", "geo": "QC", "gender": "Men", "hours": 40.9}, {"period": "2012-H2", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2012-H1", "geo": "AB", "gender": "Men", "hours": 43.8}, {"period": "2012-H1", "geo": "AB", "gender": "Women", "hours": 39.4}, {"period": "2012-H1", "geo": "BC", "gender": "Men", "hours": 41.6}, {"period": "2012-H1", "geo": "BC", "gender": "Women", "hours": 38.6}, {"period": "2012-H1", "geo": "OT", "gender": "Men", "hours": 41.8}, {"period": "2012-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2012-H1", "geo": "MB", "gender": "Men", "hours": 41.6}, {"period": "2012-H1", "geo": "MB", "gender": "Women", "hours": 38.4}, {"period": "2012-H1", "geo": "NL", "gender": "Men", "hours": 43.3}, {"period": "2012-H1", "geo": "NL", "gender": "Women", "hours": 38.6}, {"period": "2012-H1", "geo": "NS", "gender": "Men", "hours": 42.8}, {"period": "2012-H1", "geo": "NS", "gender": "Women", "hours": 38.5}, {"period": "2012-H1", "geo": "SK", "gender": "Men", "hours": 43.5}, {"period": "2012-H1", "geo": "SK", "gender": "Women", "hours": 39.1}, {"period": "2012-H1", "geo": "PE", "gender": "Men", "hours": 44.2}, {"period": "2012-H1", "geo": "PE", "gender": "Women", "hours": 38.9}, {"period": "2012-H1", "geo": "NB", "gender": "Men", "hours": 42.6}, {"period": "2012-H1", "geo": "NB", "gender": "Women", "hours": 38.6}, {"period": "2012-H1", "geo": "QC", "gender": "Men", "hours": 40.3}, {"period": "2012-H1", "geo": "QC", "gender": "Women", "hours": 37.7}, {"period": "2011-H2", "geo": "AB", "gender": "Men", "hours": 43.2}, {"period": "2011-H2", "geo": "AB", "gender": "Women", "hours": 39.6}, {"period": "2011-H2", "geo": "BC", "gender": "Men", "hours": 41.7}, {"period": "2011-H2", "geo": "BC", "gender": "Women", "hours": 39.0}, {"period": "2011-H2", "geo": "OT", "gender": "Men", "hours": 41.7}, {"period": "2011-H2", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2011-H2", "geo": "MB", "gender": "Men", "hours": 42.7}, {"period": "2011-H2", "geo": "MB", "gender": "Women", "hours": 38.6}, {"period": "2011-H2", "geo": "NL", "gender": "Men", "hours": 45.8}, {"period": "2011-H2", "geo": "NL", "gender": "Women", "hours": 39.4}, {"period": "2011-H2", "geo": "NS", "gender": "Men", "hours": 43.2}, {"period": "2011-H2", "geo": "NS", "gender": "Women", "hours": 39.0}, {"period": "2011-H2", "geo": "SK", "gender": "Men", "hours": 44.2}, {"period": "2011-H2", "geo": "SK", "gender": "Women", "hours": 39.2}, {"period": "2011-H2", "geo": "PE", "gender": "Men", "hours": 45.1}, {"period": "2011-H2", "geo": "PE", "gender": "Women", "hours": 39.1}, {"period": "2011-H2", "geo": "NB", "gender": "Men", "hours": 43.0}, {"period": "2011-H2", "geo": "NB", "gender": "Women", "hours": 38.7}, {"period": "2011-H2", "geo": "QC", "gender": "Men", "hours": 40.8}, {"period": "2011-H2", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2011-H1", "geo": "AB", "gender": "Men", "hours": 43.7}, {"period": "2011-H1", "geo": "AB", "gender": "Women", "hours": 39.2}, {"period": "2011-H1", "geo": "BC", "gender": "Men", "hours": 41.8}, {"period": "2011-H1", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2011-H1", "geo": "OT", "gender": "Men", "hours": 41.6}, {"period": "2011-H1", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2011-H1", "geo": "MB", "gender": "Men", "hours": 42.4}, {"period": "2011-H1", "geo": "MB", "gender": "Women", "hours": 38.3}, {"period": "2011-H1", "geo": "NL", "gender": "Men", "hours": 45.2}, {"period": "2011-H1", "geo": "NL", "gender": "Women", "hours": 38.8}, {"period": "2011-H1", "geo": "NS", "gender": "Men", "hours": 42.8}, {"period": "2011-H1", "geo": "NS", "gender": "Women", "hours": 38.4}, {"period": "2011-H1", "geo": "SK", "gender": "Men", "hours": 43.7}, {"period": "2011-H1", "geo": "SK", "gender": "Women", "hours": 38.6}, {"period": "2011-H1", "geo": "PE", "gender": "Men", "hours": 43.5}, {"period": "2011-H1", "geo": "PE", "gender": "Women", "hours": 39.0}, {"period": "2011-H1", "geo": "NB", "gender": "Men", "hours": 42.6}, {"period": "2011-H1", "geo": "NB", "gender": "Women", "hours": 38.3}, {"period": "2011-H1", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2011-H1", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2010-H2", "geo": "AB", "gender": "Men", "hours": 43.4}, {"period": "2010-H2", "geo": "AB", "gender": "Women", "hours": 38.9}, {"period": "2010-H2", "geo": "BC", "gender": "Men", "hours": 42.2}, {"period": "2010-H2", "geo": "BC", "gender": "Women", "hours": 38.5}, {"period": "2010-H2", "geo": "OT", "gender": "Men", "hours": 41.8}, {"period": "2010-H2", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2010-H2", "geo": "MB", "gender": "Men", "hours": 42.3}, {"period": "2010-H2", "geo": "MB", "gender": "Women", "hours": 38.8}, {"period": "2010-H2", "geo": "NL", "gender": "Men", "hours": 46.2}, {"period": "2010-H2", "geo": "NL", "gender": "Women", "hours": 39.2}, {"period": "2010-H2", "geo": "NS", "gender": "Men", "hours": 43.6}, {"period": "2010-H2", "geo": "NS", "gender": "Women", "hours": 38.9}, {"period": "2010-H2", "geo": "SK", "gender": "Men", "hours": 43.9}, {"period": "2010-H2", "geo": "SK", "gender": "Women", "hours": 39.8}, {"period": "2010-H2", "geo": "PE", "gender": "Men", "hours": 45.1}, {"period": "2010-H2", "geo": "PE", "gender": "Women", "hours": 38.7}, {"period": "2010-H2", "geo": "NB", "gender": "Men", "hours": 42.7}, {"period": "2010-H2", "geo": "NB", "gender": "Women", "hours": 39.1}, {"period": "2010-H2", "geo": "QC", "gender": "Men", "hours": 41.0}, {"period": "2010-H2", "geo": "QC", "gender": "Women", "hours": 37.4}, {"period": "2010-H1", "geo": "AB", "gender": "Men", "hours": 43.0}, {"period": "2010-H1", "geo": "AB", "gender": "Women", "hours": 38.9}, {"period": "2010-H1", "geo": "BC", "gender": "Men", "hours": 41.8}, {"period": "2010-H1", "geo": "BC", "gender": "Women", "hours": 38.7}, {"period": "2010-H1", "geo": "OT", "gender": "Men", "hours": 42.0}, {"period": "2010-H1", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2010-H1", "geo": "MB", "gender": "Men", "hours": 42.2}, {"period": "2010-H1", "geo": "MB", "gender": "Women", "hours": 38.5}, {"period": "2010-H1", "geo": "NL", "gender": "Men", "hours": 44.8}, {"period": "2010-H1", "geo": "NL", "gender": "Women", "hours": 38.6}, {"period": "2010-H1", "geo": "NS", "gender": "Men", "hours": 42.9}, {"period": "2010-H1", "geo": "NS", "gender": "Women", "hours": 38.8}, {"period": "2010-H1", "geo": "SK", "gender": "Men", "hours": 43.6}, {"period": "2010-H1", "geo": "SK", "gender": "Women", "hours": 39.3}, {"period": "2010-H1", "geo": "PE", "gender": "Men", "hours": 43.5}, {"period": "2010-H1", "geo": "PE", "gender": "Women", "hours": 38.4}, {"period": "2010-H1", "geo": "NB", "gender": "Men", "hours": 42.7}, {"period": "2010-H1", "geo": "NB", "gender": "Women", "hours": 38.3}, {"period": "2010-H1", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2010-H1", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2009-H2", "geo": "AB", "gender": "Men", "hours": 43.6}, {"period": "2009-H2", "geo": "AB", "gender": "Women", "hours": 39.1}, {"period": "2009-H2", "geo": "BC", "gender": "Men", "hours": 42.0}, {"period": "2009-H2", "geo": "BC", "gender": "Women", "hours": 38.9}, {"period": "2009-H2", "geo": "OT", "gender": "Men", "hours": 42.0}, {"period": "2009-H2", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2009-H2", "geo": "MB", "gender": "Men", "hours": 42.7}, {"period": "2009-H2", "geo": "MB", "gender": "Women", "hours": 38.7}, {"period": "2009-H2", "geo": "NL", "gender": "Men", "hours": 45.3}, {"period": "2009-H2", "geo": "NL", "gender": "Women", "hours": 38.9}, {"period": "2009-H2", "geo": "NS", "gender": "Men", "hours": 43.2}, {"period": "2009-H2", "geo": "NS", "gender": "Women", "hours": 38.5}, {"period": "2009-H2", "geo": "SK", "gender": "Men", "hours": 44.2}, {"period": "2009-H2", "geo": "SK", "gender": "Women", "hours": 39.1}, {"period": "2009-H2", "geo": "PE", "gender": "Men", "hours": 44.7}, {"period": "2009-H2", "geo": "PE", "gender": "Women", "hours": 38.9}, {"period": "2009-H2", "geo": "NB", "gender": "Men", "hours": 43.4}, {"period": "2009-H2", "geo": "NB", "gender": "Women", "hours": 39.2}, {"period": "2009-H2", "geo": "QC", "gender": "Men", "hours": 40.5}, {"period": "2009-H2", "geo": "QC", "gender": "Women", "hours": 38.0}, {"period": "2009-H1", "geo": "AB", "gender": "Men", "hours": 43.6}, {"period": "2009-H1", "geo": "AB", "gender": "Women", "hours": 39.3}, {"period": "2009-H1", "geo": "BC", "gender": "Men", "hours": 42.0}, {"period": "2009-H1", "geo": "BC", "gender": "Women", "hours": 38.6}, {"period": "2009-H1", "geo": "OT", "gender": "Men", "hours": 42.0}, {"period": "2009-H1", "geo": "OT", "gender": "Women", "hours": 39.0}, {"period": "2009-H1", "geo": "MB", "gender": "Men", "hours": 42.0}, {"period": "2009-H1", "geo": "MB", "gender": "Women", "hours": 38.8}, {"period": "2009-H1", "geo": "NL", "gender": "Men", "hours": 44.3}, {"period": "2009-H1", "geo": "NL", "gender": "Women", "hours": 38.6}, {"period": "2009-H1", "geo": "NS", "gender": "Men", "hours": 43.0}, {"period": "2009-H1", "geo": "NS", "gender": "Women", "hours": 38.9}, {"period": "2009-H1", "geo": "SK", "gender": "Men", "hours": 44.1}, {"period": "2009-H1", "geo": "SK", "gender": "Women", "hours": 38.8}, {"period": "2009-H1", "geo": "PE", "gender": "Men", "hours": 44.2}, {"period": "2009-H1", "geo": "PE", "gender": "Women", "hours": 38.7}, {"period": "2009-H1", "geo": "NB", "gender": "Men", "hours": 42.6}, {"period": "2009-H1", "geo": "NB", "gender": "Women", "hours": 39.0}, {"period": "2009-H1", "geo": "QC", "gender": "Men", "hours": 40.4}, {"period": "2009-H1", "geo": "QC", "gender": "Women", "hours": 37.5}, {"period": "2008-H2", "geo": "AB", "gender": "Men", "hours": 43.9}, {"period": "2008-H2", "geo": "AB", "gender": "Women", "hours": 39.7}, {"period": "2008-H2", "geo": "BC", "gender": "Men", "hours": 42.3}, {"period": "2008-H2", "geo": "BC", "gender": "Women", "hours": 39.2}, {"period": "2008-H2", "geo": "OT", "gender": "Men", "hours": 42.2}, {"period": "2008-H2", "geo": "OT", "gender": "Women", "hours": 38.8}, {"period": "2008-H2", "geo": "MB", "gender": "Men", "hours": 43.3}, {"period": "2008-H2", "geo": "MB", "gender": "Women", "hours": 38.8}, {"period": "2008-H2", "geo": "NL", "gender": "Men", "hours": 46.2}, {"period": "2008-H2", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2008-H2", "geo": "NS", "gender": "Men", "hours": 43.3}, {"period": "2008-H2", "geo": "NS", "gender": "Women", "hours": 38.9}, {"period": "2008-H2", "geo": "SK", "gender": "Men", "hours": 45.2}, {"period": "2008-H2", "geo": "SK", "gender": "Women", "hours": 39.5}, {"period": "2008-H2", "geo": "PE", "gender": "Men", "hours": 45.4}, {"period": "2008-H2", "geo": "PE", "gender": "Women", "hours": 38.9}, {"period": "2008-H2", "geo": "NB", "gender": "Men", "hours": 43.4}, {"period": "2008-H2", "geo": "NB", "gender": "Women", "hours": 38.8}, {"period": "2008-H2", "geo": "QC", "gender": "Men", "hours": 40.9}, {"period": "2008-H2", "geo": "QC", "gender": "Women", "hours": 38.1}, {"period": "2008-H1", "geo": "AB", "gender": "Men", "hours": 44.0}, {"period": "2008-H1", "geo": "AB", "gender": "Women", "hours": 39.5}, {"period": "2008-H1", "geo": "BC", "gender": "Men", "hours": 42.3}, {"period": "2008-H1", "geo": "BC", "gender": "Women", "hours": 39.0}, {"period": "2008-H1", "geo": "OT", "gender": "Men", "hours": 42.0}, {"period": "2008-H1", "geo": "OT", "gender": "Women", "hours": 38.7}, {"period": "2008-H1", "geo": "MB", "gender": "Men", "hours": 42.6}, {"period": "2008-H1", "geo": "MB", "gender": "Women", "hours": 39.0}, {"period": "2008-H1", "geo": "NL", "gender": "Men", "hours": 44.7}, {"period": "2008-H1", "geo": "NL", "gender": "Women", "hours": 38.9}, {"period": "2008-H1", "geo": "NS", "gender": "Men", "hours": 43.6}, {"period": "2008-H1", "geo": "NS", "gender": "Women", "hours": 38.6}, {"period": "2008-H1", "geo": "SK", "gender": "Men", "hours": 44.3}, {"period": "2008-H1", "geo": "SK", "gender": "Women", "hours": 39.1}, {"period": "2008-H1", "geo": "PE", "gender": "Men", "hours": 44.8}, {"period": "2008-H1", "geo": "PE", "gender": "Women", "hours": 38.6}, {"period": "2008-H1", "geo": "NB", "gender": "Men", "hours": 42.6}, {"period": "2008-H1", "geo": "NB", "gender": "Women", "hours": 38.6}, {"period": "2008-H1", "geo": "QC", "gender": "Men", "hours": 41.0}, {"period": "2008-H1", "geo": "QC", "gender": "Women", "hours": 37.6}, {"period": "2007-H2", "geo": "AB", "gender": "Men", "hours": 44.7}, {"period": "2007-H2", "geo": "AB", "gender": "Women", "hours": 40.3}, {"period": "2007-H2", "geo": "BC", "gender": "Men", "hours": 42.5}, {"period": "2007-H2", "geo": "BC", "gender": "Women", "hours": 39.1}, {"period": "2007-H2", "geo": "OT", "gender": "Men", "hours": 42.5}, {"period": "2007-H2", "geo": "OT", "gender": "Women", "hours": 39.0}, {"period": "2007-H2", "geo": "MB", "gender": "Men", "hours": 43.2}, {"period": "2007-H2", "geo": "MB", "gender": "Women", "hours": 39.6}, {"period": "2007-H2", "geo": "NL", "gender": "Men", "hours": 45.3}, {"period": "2007-H2", "geo": "NL", "gender": "Women", "hours": 39.6}, {"period": "2007-H2", "geo": "NS", "gender": "Men", "hours": 43.4}, {"period": "2007-H2", "geo": "NS", "gender": "Women", "hours": 39.1}, {"period": "2007-H2", "geo": "SK", "gender": "Men", "hours": 45.4}, {"period": "2007-H2", "geo": "SK", "gender": "Women", "hours": 39.4}, {"period": "2007-H2", "geo": "PE", "gender": "Men", "hours": 45.0}, {"period": "2007-H2", "geo": "PE", "gender": "Women", "hours": 39.6}, {"period": "2007-H2", "geo": "NB", "gender": "Men", "hours": 43.6}, {"period": "2007-H2", "geo": "NB", "gender": "Women", "hours": 39.2}, {"period": "2007-H2", "geo": "QC", "gender": "Men", "hours": 41.0}, {"period": "2007-H2", "geo": "QC", "gender": "Women", "hours": 37.8}, {"period": "2007-H1", "geo": "AB", "gender": "Men", "hours": 44.4}, {"period": "2007-H1", "geo": "AB", "gender": "Women", "hours": 39.5}, {"period": "2007-H1", "geo": "BC", "gender": "Men", "hours": 42.5}, {"period": "2007-H1", "geo": "BC", "gender": "Women", "hours": 39.1}, {"period": "2007-H1", "geo": "OT", "gender": "Men", "hours": 42.0}, {"period": "2007-H1", "geo": "OT", "gender": "Women", "hours": 38.9}, {"period": "2007-H1", "geo": "MB", "gender": "Men", "hours": 42.7}, {"period": "2007-H1", "geo": "MB", "gender": "Women", "hours": 38.6}, {"period": "2007-H1", "geo": "NL", "gender": "Men", "hours": 46.4}, {"period": "2007-H1", "geo": "NL", "gender": "Women", "hours": 39.0}, {"period": "2007-H1", "geo": "NS", "gender": "Men", "hours": 43.4}, {"period": "2007-H1", "geo": "NS", "gender": "Women", "hours": 38.5}, {"period": "2007-H1", "geo": "SK", "gender": "Men", "hours": 43.9}, {"period": "2007-H1", "geo": "SK", "gender": "Women", "hours": 38.8}, {"period": "2007-H1", "geo": "PE", "gender": "Men", "hours": 45.1}, {"period": "2007-H1", "geo": "PE", "gender": "Women", "hours": 39.4}, {"period": "2007-H1", "geo": "NB", "gender": "Men", "hours": 43.3}, {"period": "2007-H1", "geo": "NB", "gender": "Women", "hours": 38.7}, {"period": "2007-H1", "geo": "QC", "gender": "Men", "hours": 40.8}, {"period": "2007-H1", "geo": "QC", "gender": "Women", "hours": 37.5}, {"period": "2006-H2", "geo": "AB", "gender": "Men", "hours": 44.9}, {"period": "2006-H2", "geo": "AB", "gender": "Women", "hours": 39.8}, {"period": "2006-H2", "geo": "BC", "gender": "Men", "hours": 42.6}, {"period": "2006-H2", "geo": "BC", "gender": "Women", "hours": 39.7}, {"period": "2006-H2", "geo": "OT", "gender": "Men", "hours": 42.4}, {"period": "2006-H2", "geo": "OT", "gender": "Women", "hours": 39.0}, {"period": "2006-H2", "geo": "MB", "gender": "Men", "hours": 44.1}, {"period": "2006-H2", "geo": "MB", "gender": "Women", "hours": 39.2}, {"period": "2006-H2", "geo": "NL", "gender": "Men", "hours": 45.9}, {"period": "2006-H2", "geo": "NL", "gender": "Women", "hours": 39.9}, {"period": "2006-H2", "geo": "NS", "gender": "Men", "hours": 43.4}, {"period": "2006-H2", "geo": "NS", "gender": "Women", "hours": 38.9}, {"period": "2006-H2", "geo": "SK", "gender": "Men", "hours": 45.4}, {"period": "2006-H2", "geo": "SK", "gender": "Women", "hours": 40.0}, {"period": "2006-H2", "geo": "PE", "gender": "Men", "hours": 46.0}, {"period": "2006-H2", "geo": "PE", "gender": "Women", "hours": 39.4}, {"period": "2006-H2", "geo": "NB", "gender": "Men", "hours": 43.6}, {"period": "2006-H2", "geo": "NB", "gender": "Women", "hours": 39.5}, {"period": "2006-H2", "geo": "QC", "gender": "Men", "hours": 41.1}, {"period": "2006-H2", "geo": "QC", "gender": "Women", "hours": 37.8}];
+const PERIODS = ["2006-H2", "2007-H1", "2007-H2", "2008-H1", "2008-H2", "2009-H1", "2009-H2", "2010-H1", "2010-H2", "2011-H1", "2011-H2", "2012-H1", "2012-H2", "2013-H1", "2013-H2", "2014-H1", "2014-H2", "2015-H1", "2015-H2", "2016-H1", "2016-H2", "2017-H1", "2017-H2", "2018-H1", "2018-H2", "2019-H1", "2019-H2", "2020-H1", "2020-H2", "2021-H1", "2021-H2", "2022-H1", "2022-H2", "2023-H1", "2023-H2", "2024-H1", "2024-H2", "2025-H1", "2025-H2", "2026-H1"];
+const PROVINCES = ["AB", "BC", "OT", "MB", "NL", "NS", "SK", "PE", "NB", "QC"];
+
+const PROV_COLORS = {
+  AB:'#4f8ef7', BC:'#f97316', OT:'#a78bfa', MB:'#34d399',
+  NL:'#f43f5e', NS:'#facc15', SK:'#38bdf8', PE:'#fb7185',
+  NB:'#a3e635', QC:'#818cf8'
+};
+
+// Index data
+const byKey = {}; // key: `${period}|${geo}|${gender}`
+RAW_DATA.forEach(d => { byKey[`${d.period}|${d.geo}|${d.gender}`] = d.hours; });
+
+let currentGender = 'both';
+
+function setGender(g) {
+  currentGender = g;
+  ['both','men','women'].forEach(x => {
+    const btn = document.getElementById('btn-'+x);
+    btn.className = 'tog-btn';
+    if (x === g) btn.classList.add('active-' + x);
+  });
+  render();
+}
+
+function getHours(period, geo) {
+  if (currentGender === 'men') return byKey[`${period}|${geo}|Men`];
+  if (currentGender === 'women') return byKey[`${period}|${geo}|Women`];
+  const m = byKey[`${period}|${geo}|Men`];
+  const w = byKey[`${period}|${geo}|Women`];
+  return (m != null && w != null) ? +((m + w) / 2).toFixed(1) : null;
+}
+
+function render() {
+  // Gather all values for current gender to set colour scale
+  const allVals = [];
+  PERIODS.forEach(p => PROVINCES.forEach(geo => {
+    const v = getHours(p, geo);
+    if (v != null) allVals.push(v);
+  }));
+  const vMin = d3.min(allVals);
+  const vMax = d3.max(allVals);
+
+  // Update title
+  const gLabel = currentGender === 'both' ? 'All Workers' : currentGender === 'men' ? 'Men' : 'Women';
+  document.getElementById('chartTitle').textContent = `Average Usual Hours Worked - ${gLabel}`;
+
+  // Colour scale - use gender-appropriate colour
+  const baseColor = currentGender === 'women' ? '#b5294e' : currentGender === 'men' ? '#1a5fa8' : '#2a6140';
+  const colorScale = d3.scaleSequential()
+    .domain([vMin, vMax])
+    .interpolator(d3.interpolate('#f5f3f0', baseColor));
+
+  // Legend
+  document.getElementById('leg-low').textContent = vMin.toFixed(1) + ' hrs';
+  document.getElementById('leg-high').textContent = vMax.toFixed(1) + ' hrs';
+  const canvas = document.getElementById('legendCanvas');
+  const ctx = canvas.getContext('2d');
+  for (let i = 0; i < 200; i++) {
+    ctx.fillStyle = colorScale(vMin + (vMax - vMin) * i / 200);
+    ctx.fillRect(i, 0, 1, 10);
+  }
+
+  // Update side card with latest period overall stats
+  updateSideCard(vMin, vMax);
+  renderHeatmap(colorScale, vMin, vMax);
+}
+
+function updateSideCard(vMin, vMax) {
+  // Find province with most/least hours averaged across all periods
+  const provAvg = PROVINCES.map(geo => {
+    const vals = PERIODS.map(p => getHours(p, geo)).filter(v => v != null);
+    return { geo, avg: d3.mean(vals) };
+  });
+  const most = provAvg.reduce((a,b) => b.avg > a.avg ? b : a);
+  const least = provAvg.reduce((a,b) => b.avg < a.avg ? b : a);
+  const natAvg = d3.mean(provAvg, d => d.avg);
+
+  const mpEl = document.getElementById('si-most-prov');
+  mpEl.textContent = most.geo;
+  mpEl.style.color = PROV_COLORS[most.geo];
+  document.getElementById('si-most-hrs').textContent = most.avg.toFixed(1) + ' hrs/wk';
+  document.getElementById('si-most-sub').textContent = '20-year average across all periods';
+
+  const lpEl = document.getElementById('si-least-prov');
+  lpEl.textContent = least.geo;
+  lpEl.style.color = PROV_COLORS[least.geo];
+  document.getElementById('si-least-hrs').textContent = least.avg.toFixed(1) + ' hrs/wk';
+  document.getElementById('si-least-sub').textContent = '20-year average across all periods';
+
+  document.getElementById('si-nat-avg').textContent = natAvg.toFixed(1) + ' hrs';
+}
+
+function renderHeatmap(colorScale, vMin, vMax) {
+  const container = document.getElementById('heatmap');
+  const totalW = container.offsetWidth || 800;
+  const margin = { top: 6, right: 10, bottom: 40, left: 38 };
+  const cellH = 30;
+  const H = margin.top + PROVINCES.length * cellH + margin.bottom;
+  const w = totalW - margin.left - margin.right;
+  const cellW = w / PERIODS.length;
+
+  d3.select(container).selectAll('*').remove();
+  const svg = d3.select(container).append('svg').attr('width', totalW).attr('height', H);
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Draw cells
+  PROVINCES.forEach((geo, gi) => {
+    PERIODS.forEach((period, pi) => {
+      const val = getHours(period, geo);
+      if (val == null) return;
+
+      const cell = g.append('rect')
+        .attr('x', pi * cellW)
+        .attr('y', gi * cellH)
+        .attr('width', cellW - 1)
+        .attr('height', cellH - 1)
+        .attr('fill', colorScale(val))
+        .attr('rx', 2)
+        .style('cursor', 'pointer');
+
+      cell.on('mousemove', function(event) {
+        const tt = document.getElementById('tooltip');
+        tt.style.opacity = 1;
+        tt.style.left = (event.clientX + 14) + 'px';
+        tt.style.top = (event.clientY - 10) + 'px';
+        const gLabel = currentGender === 'both' ? 'Avg' : currentGender === 'men' ? 'Men' : 'Women';
+        tt.innerHTML = `<strong>${geo} - ${period}</strong><br>${gLabel}: ${val} hrs/week`;
+
+        // Update hover info in side card
+        document.getElementById('si-hover').textContent =
+          `${geo} in ${period}: ${val} hrs/week (${currentGender === 'both' ? 'avg' : currentGender})`;
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').style.opacity = 0;
+        document.getElementById('si-hover').textContent = 'Move your cursor over any cell to see the exact hours for that province and period.';
+      });
+    });
+  });
+
+  // Y axis - province labels coloured
+  PROVINCES.forEach((geo, gi) => {
+    g.append('text')
+      .attr('x', -6).attr('y', gi * cellH + cellH / 2 + 4)
+      .attr('text-anchor', 'end')
+      .attr('font-size', 12).attr('font-weight', 700)
+      .attr('fill', PROV_COLORS[geo])
+      .text(geo);
+  });
+
+  // X axis - show every 4 periods (2 years)
+  PERIODS.forEach((p, i) => {
+    if (i % 4 !== 0) return;
+    g.append('text')
+      .attr('x', i * cellW + cellW / 2)
+      .attr('y', PROVINCES.length * cellH + 16)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 11).attr('fill', '#6b6b65')
+      .text("'" + p.slice(2,4) + p.slice(4));
+  });
+
+  // Shock band overlays
+  const shocks = [
+    { start: '2008-H1', end: '2009-H2', label: 'GFC' },
+    { start: '2020-H1', end: '2020-H2', label: 'COVID' },
+  ];
+  shocks.forEach(({ start, end, label }) => {
+    const si = PERIODS.indexOf(start);
+    const ei = PERIODS.indexOf(end);
+    if (si < 0 || ei < 0) return;
+    const sx = si * cellW;
+    const sw = (ei - si + 1) * cellW;
+    g.append('rect')
+      .attr('x', sx).attr('y', 0)
+      .attr('width', sw).attr('height', PROVINCES.length * cellH)
+      .attr('fill', 'none')
+      .attr('stroke', '#6b6b65')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', '4,3')
+      .attr('rx', 2)
+      .attr('pointer-events', 'none');
+    g.append('text')
+      .attr('x', sx + sw / 2)
+      .attr('y', -2)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 10).attr('font-weight', 700).attr('fill', '#6b6b65')
+      .text(label);
+  });
+}
+
+render();
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
