@@ -9,16 +9,16 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#f9f8f5;--card:#ffffff;--text:#1a1a18;--muted:#6b6b65;
-  --border:#e0dfd8;--accent:#2a6140;--blue:#1a5fa8;--pink:#b5294e;
+  --border:#e0dfd8;--accent:#2a6140;--green:#2a9d5c;--blue:#1a5fa8;--pink:#b5294e;
   --shadow:0 1px 4px rgba(0,0,0,0.08)
 }
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
 
 /* NAV */
-.nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;position:sticky;top:0;z-index:100;height:52px}
+.nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;height:52px}
 .nav-title{font-size:13px;font-weight:600;margin-right:28px;white-space:nowrap}
-.nav-pages{display:flex;height:100%}
-.nav-page{height:100%;display:flex;align-items:center;padding:0 14px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none;white-space:nowrap;transition:color 0.15s}
+.nav-pages{display:flex;height:100%;gap:8px}
+.nav-page{height:100%;display:flex;align-items:center;padding:0 16px;font-size:13px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none;white-space:nowrap;transition:color 0.15s}
 .nav-page:hover{color:var(--text)}
 .nav-page.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
 .nav-page.disabled{opacity:0.4;cursor:default;pointer-events:none}
@@ -49,18 +49,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .toggle-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .toggle-group{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .toggle-btn{padding:5px 14px;font-size:12px;font-weight:500;border:none;background:transparent;cursor:pointer;color:var(--muted);transition:all .15s;white-space:nowrap}
-.toggle-btn.active-all{background:var(--blue);color:#fff}
+.toggle-btn.active-all{background:#2a9d5c;color:#fff}
 .toggle-btn.active-men{background:#1a5fa8;color:#fff}
 .toggle-btn.active-women{background:#b5294e;color:#fff}
 .toggle-btn:not(.active-all):not(.active-men):not(.active-women):hover{background:var(--border)}
 
 /* SCRUBBER */
-.scrubber{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.scrubber{display:flex;align-items:center;gap:10px}
 .play-btn{width:30px;height:30px;border-radius:50%;border:none;background:var(--blue);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:background .15s}
 .play-btn:hover{background:#0f4c81}
 .play-btn svg{width:11px;height:11px;fill:#fff}
 .scrubber input[type=range]{flex:1;accent-color:var(--blue);cursor:pointer}
-.period-badge{font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:var(--blue);min-width:72px;text-align:right;white-space:nowrap}
+.period-badge{font-family:'Courier New',monospace;font-size:22px;font-weight:800;color:var(--blue);letter-spacing:0.03em;line-height:1;white-space:nowrap}
 
 /* RACE SVG */
 #race-svg{width:100%;display:block;font-family:'Courier New',monospace}
@@ -80,9 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 </head>
 <body>
 
-<nav class="nav">
-  <span class="nav-title">&#127809; Canadian Labour Market</span>
-  <div class="nav-pages">
+<nav class="nav">  <div class="nav-pages">
     <a class="nav-page active" href="index.html">1. National Overview</a>
     <a class="nav-page" href="page2.html">2. Economic Shocks</a>
     <a class="nav-page" href="page3.html">3. Gender Wage Gap</a>
@@ -127,7 +125,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
   <!-- BAR RACE -->
   <div class="card">
-    <div class="card-title">Median hourly wage by province</div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:2px">
+      <div class="card-title">Median hourly wage by province</div>
+      <span class="period-badge" id="race-period">2006-H2</span>
+    </div>
     <div class="card-subtitle">Ranked highest → lowest each period</div>
 
     <!-- Gender toggle -->
@@ -146,7 +147,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
         <svg id="play-icon" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9"/></svg>
       </button>
       <input type="range" id="race-slider" min="0" max="39" value="0" step="1">
-      <span class="period-badge" id="race-period">2006-H2</span>
     </div>
 
     <svg id="race-svg" viewBox="0 0 820 460"></svg>
@@ -214,7 +214,7 @@ let currentGender = 'all';
 function getProvData()  { return currentGender==='men' ? PROV_MEN  : currentGender==='women' ? PROV_WOMEN  : PROV_ALL; }
 function getNatData()   { return currentGender==='men' ? NAT_MEN   : currentGender==='women' ? NAT_WOMEN   : NAT_ALL; }
 function getByTime()    { return currentGender==='men' ? BY_TIME_MEN : currentGender==='women' ? BY_TIME_WOMEN : BY_TIME_ALL; }
-function getLineColor() { return currentGender==='women' ? '#b5294e' : '#1a5fa8'; }
+function getLineColor() { return currentGender==='women' ? '#b5294e' : currentGender==='men' ? '#1a5fa8' : '#2a9d5c'; }
 
 // ── tooltip ──
 const ttEl=document.getElementById('tooltip');

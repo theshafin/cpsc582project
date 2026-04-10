@@ -15,9 +15,9 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
 
 /* NAV */
-.nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;position:sticky;top:0;z-index:100;height:52px}
+.nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;height:52px}
 .nav-title{font-size:13px;font-weight:600;margin-right:28px;white-space:nowrap}
-.nav-pages{display:flex;height:100%}
+.nav-pages{display:flex;height:100%;gap:8px}
 .nav-page{height:100%;display:flex;align-items:center;padding:0 14px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none;white-space:nowrap}
 .nav-page.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
 .nav-page.disabled{opacity:.4;cursor:default;pointer-events:none}
@@ -111,9 +111,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 </head>
 <body>
 
-<nav class="nav">
-  <span class="nav-title">&#127809; Canadian Labour Market</span>
-  <div class="nav-pages">
+<nav class="nav">  <div class="nav-pages">
     <a class="nav-page" href="index.html">1. National Overview</a>
     <a class="nav-page active" href="page2.html">2. Economic Shocks</a>
     <a class="nav-page" href="page3.html">3. Gender Wage Gap</a>
@@ -226,7 +224,7 @@ const EVENTS = {
   gfc:{
     label:"2008-09 Global Financial Crisis",
     badge:"badge-recession", badgeText:"Recession",
-    shockStart:"2008-H2", shockEnd:"2009-H2", bandColor:"#fef3c7",
+    shockStart:"2008-H2", shockEnd:"2009-H2", bandColor:"#fef3c7", borderColor:"#d97706",
     desc:"In the second half of 2008, a collapse in global financial markets triggered Canada's worst recession since the 1990s. Canadian banks and exporters were hit hard as credit froze and demand for manufactured goods collapsed. The goods-producing sector - dominated by male workers in construction, auto manufacturing, and resource extraction - shed jobs rapidly. Women, who were more concentrated in public-sector services like healthcare, education, and government, were comparatively shielded. The Bank of Canada cut interest rates aggressively and the federal government launched a major stimulus package, helping Canada recover faster than most peer economies by 2010.",
     annotations:{
       emp_rate:{
@@ -254,7 +252,7 @@ const EVENTS = {
   oil:{
     label:"Oil Price Crash",
     badge:"badge-oil", badgeText:"Resource Shock",
-    shockStart:"2014-H2", shockEnd:"2016-H2", bandColor:"#ffedd5",
+    shockStart:"2014-H2", shockEnd:"2016-H2", bandColor:"#ffedd5", borderColor:"#ea580c",
     desc:"A global oil glut caused crude prices to collapse from mid-2014 onward, bottoming out in early 2016. Alberta was devastated - tens of thousands of oilpatch jobs vanished in mining, oil and gas extraction, and the support services around them. Because resource extraction in Canada is overwhelmingly male-dominated, men bore the vast majority of job losses. Women in the same provinces were more likely to work in healthcare, retail, and education, which were less directly exposed to the price crash. Outside Alberta and Saskatchewan, most provinces were actually insulated or benefited from lower energy input costs.",
     annotations:{
       emp_rate:{
@@ -282,7 +280,7 @@ const EVENTS = {
   covid:{
     label:"COVID-19 Pandemic",
     badge:"badge-pandemic", badgeText:"Pandemic",
-    shockStart:"2020-H1", shockEnd:"2022-H2", bandColor:"#fce7f3",
+    shockStart:"2020-H1", shockEnd:"2022-H2", bandColor:"#fce7f3", borderColor:"#db2777",
     desc:"Provincial lockdowns beginning in March 2020 caused the sharpest and fastest labour market contraction in Canadian history. Unlike previous recessions where men were hit hardest, COVID-19 disproportionately affected women - hospitality, retail, personal care, and childcare are female-dominated sectors and were the first to be shut down. Many women also left the workforce temporarily to care for children whose schools and daycares had closed. When the economy reopened, a historically tight labour market drove rapid wage growth, and women's wages rose faster than men's during the recovery period, slightly narrowing the long-standing gender wage gap.",
     annotations:{
       emp_rate:{
@@ -312,7 +310,7 @@ const EVENTS = {
   inflation:{
     label:"Post-COVID Inflation Surge",
     badge:"badge-inflation", badgeText:"Inflation",
-    shockStart:"2022-H1", shockEnd:"2023-H1", bandColor:"#ede9fe",
+    shockStart:"2022-H1", shockEnd:"2023-H1", bandColor:"#ede9fe", borderColor:"#7c3aed",
     desc:"Canada experienced its highest inflation in four decades through 2022, driven by a combination of pandemic-era supply chain disruptions, pent-up consumer demand, and rising energy prices. The Bank of Canada raised its policy interest rate dramatically to combat inflation. While this slowed hiring in interest-rate-sensitive sectors like housing and finance, the broader labour market remained tight and nominal wages continued growing across genders and provinces. Real wages - adjusted for inflation - actually declined for many workers, particularly those in lower-wage service jobs disproportionately held by women.",
     annotations:{
       emp_rate:{
@@ -340,7 +338,7 @@ const EVENTS = {
   tariff:{
     label:"US-Canada Trade & Tariff Shock",
     badge:"badge-tariff", badgeText:"Trade Shock",
-    shockStart:"2025-H1", shockEnd:"2026-H1", bandColor:"#dcfce7",
+    shockStart:"2025-H1", shockEnd:"2026-H1", bandColor:"#dcfce7", borderColor:"#16a34a",
     desc:"Threatened and imposed US tariffs in early 2025 created significant uncertainty for Canadian exporters, particularly in Ontario and Québec where manufacturing is deeply integrated into cross-border supply chains. Sectors like auto parts, steel, and aluminium faced direct pressure. However, Canada's broader labour market proved more resilient than feared - resource-producing provinces like Alberta and Saskatchewan were largely insulated by strong commodity prices, and service sectors continued expanding. The Bank of Canada cut interest rates multiple times through 2024-25, helping cushion the impact on employment.",
     annotations:{
       emp_rate:{
@@ -417,7 +415,7 @@ function renderSummary(evKey){
 }
 
 // ── chart builder ──
-function buildChart(svgId, gender, evCfg, prov, metric){
+function buildChart(svgId, gender, evCfg, prov, metric, sharedY){
   const svgEl=document.getElementById(svgId);
   const W=svgEl.clientWidth||560;
   const H=280;
@@ -443,18 +441,29 @@ function buildChart(svgId, gender, evCfg, prov, metric){
   if(!allVals.length) return;
 
   const xSc=d3.scalePoint().domain(PERIODS).range([0,w]).padding(0.1);
-  const pad=(d3.max(allVals)-d3.min(allVals))*0.12||1;
-  const yMin=d3.min(allVals)-pad;
-  const yMax=d3.max(allVals)+pad;
+  let yMin, yMax;
+  if(sharedY) {
+    yMin = sharedY[0]; yMax = sharedY[1];
+  } else {
+    const pad=(d3.max(allVals)-d3.min(allVals))*0.12||1;
+    yMin=d3.min(allVals)-pad;
+    yMax=d3.max(allVals)+pad;
+  }
   const ySc=d3.scaleLinear().domain([yMin,yMax]).range([h,0]);
 
   const g=svg.append('g').attr('transform',`translate(${mg.left},${mg.top})`);
 
-  // shock band
+  // shock band - high contrast: solid fill + border lines
   const sx0=xSc(evCfg.shockStart)??0;
   const sx1=(xSc(evCfg.shockEnd)??sx0)+xSc.step()*0.6;
   g.append('rect').attr('x',sx0).attr('y',0).attr('width',sx1-sx0).attr('height',h)
-    .attr('fill',evCfg.bandColor).attr('opacity',.7);
+    .attr('fill',evCfg.bandColor).attr('opacity',1);
+  // left edge line
+  g.append('line').attr('x1',sx0).attr('x2',sx0).attr('y1',0).attr('y2',h)
+    .attr('stroke',evCfg.borderColor||'#92400e').attr('stroke-width',1.5).attr('stroke-dasharray','4,3').attr('opacity',.6);
+  // right edge line
+  g.append('line').attr('x1',sx1).attr('x2',sx1).attr('y1',0).attr('y2',h)
+    .attr('stroke',evCfg.borderColor||'#92400e').attr('stroke-width',1.5).attr('stroke-dasharray','4,3').attr('opacity',.6);
 
   // grid
   g.append('g').attr('class','grid')
@@ -512,10 +521,19 @@ function redraw(){
   renderSummary(currentEvent);
   document.getElementById('title-men').textContent   = METRIC_TITLE[currentMetric].men;
   document.getElementById('title-women').textContent = METRIC_TITLE[currentMetric].women;
-  buildChart('c-men',   'men',   ev, currentProv, currentMetric);
-  buildChart('c-women', 'women', ev, currentProv, currentMetric);
-  renderAnnList('ann-men',   'men',   ev, currentMetric);
-  renderAnnList('ann-women', 'women', ev, currentMetric);
+
+  // Compute shared Y domain across both genders for this province + metric
+  const metric = currentMetric;
+  const menVals   = MEN_DATA.filter(d=>d.province===currentProv).map(d=>d[metric]).filter(v=>v!=null);
+  const womenVals = WOMEN_DATA.filter(d=>d.province===currentProv).map(d=>d[metric]).filter(v=>v!=null);
+  const allCombined = [...menVals, ...womenVals];
+  const pad = (d3.max(allCombined)-d3.min(allCombined))*0.12||1;
+  const sharedY = [d3.min(allCombined)-pad, d3.max(allCombined)+pad];
+
+  buildChart('c-men',   'men',   ev, currentProv, metric, sharedY);
+  buildChart('c-women', 'women', ev, currentProv, metric, sharedY);
+  renderAnnList('ann-men',   'men',   ev, metric);
+  renderAnnList('ann-women', 'women', ev, metric);
 }
 
 redraw();
